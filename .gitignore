@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment/config
+.env
+.env.*
+
+# Flask/runtime
+instance/
+*.log
+
+# Local databases and backups
+*.db
+*.sqlite
+*.sqlite3
+*backup*.db
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Frontend tooling (if added later)
+node_modules/

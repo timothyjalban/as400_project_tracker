@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div>
+                <h1>Order Tracker</h1>
+                <div class="header-subtitle">Web Version - Phase 10+</div>
+            </div>
+            <div id="helperStatus" class="helper-status" title="Desktop Helper Service Status">
+                <span id="helperStatusText">Checking automation...</span>
+            </div>
+        </header>
+
+        <!-- Filters Bar -->
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label for="searchInput">Search:</label>
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Name, project, quote/PO, etc."
+                    autocomplete="off"
+                >
+            </div>
+
+            <div class="filter-group">
+                <label for="stageFilter">Stage:</label>
+                <select id="stageFilter">
+                    <option value="">(All)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showCompleted">
+                    <span>Show Completed</span>
+                </label>
+            </div>
+
+            <div class="filter-group">
+                <button id="refreshBtn" class="btn-refresh">🔄 Refresh</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="exportBtn" class="btn-export">📄 Export CSV</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="exportBlankProcessBtn" class="btn-export">🖨️ Product Intake Sheet</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="backupAllBtn" class="btn-backup-all">💾 Backup All</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="remindersBtn" class="btn-reminders">⏰ Reminders</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="ocrImportBtn" class="btn-ocr">� Bulk Import</button>
+            </div>
+
+            <div class="filter-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="enableMonitoring">
+                    <span>🔔 Monitor</span>
+                </label>
+            </div>
+
+            <div class="filter-group">
+                <button id="newOrderBtn" class="btn-new-order">+ New Order</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="customerLookupBtn" class="btn-open-order">👤 Customer Lookup</button>
+            </div>
+
+            <div class="filter-group">
+                <button id="toolbarOpenQuoteBtn" class="btn-open-order" onclick="openQuote()">Open Quote</button>
+            </div>
+            <div class="filter-group">
+                <button id="toolbarOpenInvoiceBtn" class="btn-open-order" onclick="openInvoice()">Open Invoice</button>
+            </div>
+            <div class="filter-group">
+                <button id="toolbarOpenSpecialOrderBtn" class="btn-open-order" onclick="openSpecialOrder()">Open Special Order</button>
+            </div>
+            <div class="filter-group">
+                <button id="toolbarDeleteOrderBtn" class="btn-delete-order" onclick="deleteSelectedOrder()">🗑️ Delete Order</button>
+            </div>
+        </div>
+
+        <!-- Orders Count -->
+        <div class="orders-count">
+            <span id="ordersCount">Loading...</span>
+        </div>
+
+        <div class="workspace-layout">
+            <aside class="orders-column">
+                <div class="orders-column-header">
+                    <h2>Orders</h2>
+                    <span class="orders-column-subtitle">Click an order to open its sales process</span>
+                    <input
+                        type="text"
+                        id="ordersSearchInput"
+                        class="orders-search-input"
+                        placeholder="Search orders..."
+                        autocomplete="off"
+                    >
+                </div>
+                <div id="ordersList" class="orders-list">
+                    <!-- Order list populated by JavaScript -->
+                </div>
+            </aside>
+
+            <section class="process-panel">
+                <div id="processEmpty" class="process-empty">
+                    <div class="empty-state-icon">📈</div>
+                    <p>Select an order from the left to view its sales process.</p>
+                </div>
+
+                <div id="processContent" class="process-content" style="display: none;">
+                    <div class="process-header">
+                        <div>
+                            <h2 id="processOrderTitle">Order</h2>
+                            <div id="processOrderMeta" class="process-order-meta"></div>
+                        </div>
+                    </div>
+
+                    <div id="completedOrdersPanel" class="completed-orders-panel" style="display: none;">
+                        <div class="completed-orders-header">
+                            <h3>Completed Orders</h3>
+                            <span id="completedOrdersCount" class="completed-orders-count">0</span>
+                        </div>
+                        <div id="completedOrdersList" class="completed-orders-list"></div>
+                    </div>
+
+                    <div class="process-summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-label">Current Stage</div>
+                            <div id="processCurrentStage" class="summary-value"></div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Progress</div>
+                            <div id="processProgressValue" class="summary-value"></div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Last Updated</div>
+                            <div id="processUpdatedValue" class="summary-value"></div>
+                        </div>
+                    </div>
+
+                    <div class="items-type-actions items-top-actions">
+                        <button type="button" id="addDoorItemBtn" class="btn btn-primary">+ Door</button>
+                        <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
+                    </div>
+
+                    <div class="items-editor-card">
+                        <div class="process-editor-header">
+                            <h3>Order Items</h3>
+                            <span class="items-editor-subtitle">Start with Door or Window, then add details</span>
+                        </div>
+                        <div id="lineItemsList" class="line-items-list"></div>
+                    </div>
+
+                    <div class="process-timeline-card">
+                        <div class="process-editor-header">
+                            <h3>Sales Process</h3>
+                            <div class="process-editor-actions">
+                                <button type="button" class="btn btn-primary" onclick="createQuote()">Create Quote</button>
+                                <button type="button" class="btn btn-primary" onclick="createInvoice()">Charge Sale</button>
+                                <button type="button" class="btn btn-primary" onclick="createSpecialOrder()">Special Order</button>
+                                <input type="file" id="processFileInput" multiple style="display: none;" onchange="handleProcessFileSelect(event)">
+                                <button type="button" class="btn btn-secondary" onclick="openProcessFilePicker()">Add Files</button>
+                                <button type="button" id="processPrevStageBtn" class="btn btn-secondary" onclick="moveSelectedOrderStage(-1)">Previous Stage</button>
+                                <button type="button" id="processNextStageBtn" class="btn btn-secondary" onclick="moveSelectedOrderStage(1)">Next Stage</button>
+                                <div class="process-stage-jump">
+                                    <select id="processJumpStageSelect" aria-label="Jump to stage"></select>
+                                    <button type="button" class="btn btn-secondary" onclick="jumpToSelectedStage()">Jump To Stage</button>
+                                </div>
+                                <button type="button" id="processArchiveOrderBtn" class="btn btn-warning" onclick="toggleSelectedOrderArchive()">Archive Order</button>
+                                <button id="saveInlineOrderBtn" class="btn btn-primary">Save Changes</button>
+                            </div>
+                        </div>
+                        <div id="processTimeline" class="process-timeline"></div>
+
+                        <!-- Order Reminders Panel -->
+                        <div id="orderRemindersPanel" class="form-section">
+                            <h3>
+                                ⏰ Reminders for this Order
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="quickAddReminderForOrder()" title="Add reminder for this order">+ Add</button>
+                            </h3>
+                            <!-- Populated by loadOrderReminders() -->
+                        </div>
+
+                        <div class="form-section process-attachments" id="processAttachmentsSection" style="display: none;">
+                            <div class="attachments-header">
+                                <h3>Attachments</h3>
+                                <button type="button" class="btn btn-info" id="processDownloadAllBtn" onclick="downloadAllAttachments()" style="display: none;">
+                                    📦 Download All
+                                </button>
+                            </div>
+                            <div id="processAttachmentsList" class="attachments-list">
+                                <div class="attachments-empty">No attachments yet</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="floatingStageJumpBar" class="floating-stage-jump-bar" aria-label="Quick stage jump controls">
+                        <div id="floatingStageJumpTrack" class="floating-stage-jump-track"></div>
+                    </div>
+
+                    <div class="inline-order-store">
+                        <form id="inlineOrderForm" class="form-grid">
+                            <input type="hidden" id="inline_line_items" name="line_items">
+                            <input type="hidden" id="inline_additional_quotes" name="additional_quotes">
+                            <input type="hidden" id="inline_customer_profile_id" name="customer_profile_id">
+                            <input type="hidden" id="inline_default_project_notes" name="default_project_notes">
+                            <div class="form-group">
+                                <label for="inline_customer_name">Customer Name *</label>
+                                <input type="text" id="inline_customer_name" name="customer_name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_customer_phone">Phone</label>
+                                <input type="text" id="inline_customer_phone" name="customer_phone">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_customer_email">Email</label>
+                                <input type="email" id="inline_customer_email" name="customer_email">
+                            </div>
+                            <div class="form-group customer-number-field">
+                                <label for="inline_customer_number">Customer Account #</label>
+                                <input type="text" id="inline_customer_number" name="customer_number" placeholder="Optional account number">
+                                <small class="field-hint">Used to auto-fill returning customer details.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_project_name">Project Name</label>
+                                <input type="text" id="inline_project_name" name="project_name">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_stage">Stage *</label>
+                                <select id="inline_stage" name="stage" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_priority_manual">Priority</label>
+                                <input type="number" id="inline_priority_manual" name="priority_manual" min="0" max="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_quote_number">Primary Quote Number</label>
+                                <input type="text" id="inline_quote_number" name="quote_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_quote_date">Primary Quote Date</label>
+                                <input type="date" id="inline_quote_date" name="quote_date">
+                            </div>
+                            <div class="form-group full-width">
+                                <div class="quote-extra-controls">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="inlineAddSecondaryQuoteBtn" onclick="showSecondaryQuoteFields('inline')">+ Add Secondary Quote</button>
+                                    <button type="button" class="btn btn-warning btn-sm" id="inlineRemoveSecondaryQuoteBtn" onclick="hideSecondaryQuoteFields('inline')" style="display: none;">Remove Secondary Quote</button>
+                                </div>
+                            </div>
+                            <div class="form-group full-width quote-extra-section" id="inlineSecondaryQuoteSection" style="display: none;">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="inline_quote_number_2">Secondary Quote Number</label>
+                                        <input type="text" id="inline_quote_number_2" name="quote_number_2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="inline_quote_date_2">Secondary Quote Date</label>
+                                        <input type="date" id="inline_quote_date_2" name="quote_date_2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="inline_quote_total_2">Secondary Quote Total</label>
+                                        <input type="number" step="0.01" id="inline_quote_total_2" name="quote_total_2">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_quote_total">Quote Total</label>
+                                <input type="number" step="0.01" id="inline_quote_total" name="quote_total">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_invoice_number">Invoice Number</label>
+                                <input type="text" id="inline_invoice_number" name="invoice_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_invoice_date">Invoice Date</label>
+                                <input type="date" id="inline_invoice_date" name="invoice_date">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_invoice_total">Invoice Total</label>
+                                <input type="number" step="0.01" id="inline_invoice_total" name="invoice_total">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_vendor">Vendor</label>
+                                <input type="text" id="inline_vendor" name="vendor">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_product_type">Product Type</label>
+                                <input type="text" id="inline_product_type" name="product_type">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="inline_po_numbers">PO Number(s)</label>
+                                <textarea id="inline_po_numbers" name="po_numbers" rows="2" placeholder="Enter one or many POs, separated by commas or new lines"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_po_date_signed">PO Date</label>
+                                <input type="date" id="inline_po_date_signed" name="po_date_signed">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_vendor_ack_number">Vendor Ack Number</label>
+                                <input type="text" id="inline_vendor_ack_number" name="vendor_ack_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="inline_eta_date">ETA Date</label>
+                                <input type="date" id="inline_eta_date" name="eta_date">
+                            </div>
+                        </form>
+                    </div>
+
+                </div>
+            </section>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="loading-indicator">
+            <div class="spinner"></div>
+            <p>Loading orders...</p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="error-message" style="display: none;">
+            <strong>Error:</strong> <span id="errorText"></span>
+        </div>
+    </div>
+
+    <!-- Order Detail Modal -->
+    <div id="orderModal" class="modal">
+        <div class="modal-content order-modal-content">
+            <div class="modal-header">
+                <h2>Order #<span id="modalOrderId"></span></h2>
+                <button class="modal-close" onclick="closeOrderModal()">&times;</button>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="quick-actions" id="quickActions" style="display: none;">
+                <div class="quick-actions-row">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="createQuote()">
+                        📝 Create Quote
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="openQuoteBtn" onclick="openQuote()" style="display: none;">
+                        📂 Open Quote
+                    </button>
+                </div>
+                <div class="quick-actions-row">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="createInvoice()">
+                        🧾 Create Invoice
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="openInvoiceBtn" onclick="openInvoice()" style="display: none;">
+                        📂 Open Invoice
+                    </button>
+                </div>
+                <div class="quick-actions-row">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="createSpecialOrder()">
+                        📋 Create Special Order
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="openSpecialOrderBtn" onclick="openSpecialOrder()" style="display: none;">
+                        📂 Open Special Order
+                    </button>
+                </div>
+            </div>
+            
+            <div class="modal-body">
+                <form id="orderForm">
+                    <input type="hidden" id="additional_quotes" name="additional_quotes">
+                    <input type="hidden" id="customer_profile_id" name="customer_profile_id">
+                    <input type="hidden" id="default_project_notes" name="default_project_notes">
+                    <!-- Customer Information -->
+                    <div class="form-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Customer Information</h3>
+                            <button type="button" class="btn btn-secondary btn-sm" id="customerHistoryBtn" onclick="showCustomerHistory()" style="display: none;">
+                                📋 Customer History
+                            </button>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="customer_name">Customer Name *</label>
+                                <input type="text" id="customer_name" name="customer_name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="customer_phone">Phone</label>
+                                <input type="text" id="customer_phone" name="customer_phone">
+                            </div>
+                            <div class="form-group">
+                                <label for="customer_email">Email</label>
+                                <input type="email" id="customer_email" name="customer_email">
+                            </div>
+                            <div class="form-group customer-number-field">
+                                <label for="customer_number">Customer Account #</label>
+                                <input type="text" id="customer_number" name="customer_number" placeholder="Optional account number">
+                                <small class="field-hint">Used to auto-fill returning customer details.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="project_name">Project Name</label>
+                                <input type="text" id="project_name" name="project_name">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quote Information -->
+                    <div class="form-section">
+                        <h3>Quote Information</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="quote_number">Primary Quote Number</label>
+                                <input type="text" id="quote_number" name="quote_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="quote_date">Primary Quote Date</label>
+                                <input type="date" id="quote_date" name="quote_date">
+                            </div>
+                            <div class="form-group full-width">
+                                <div class="quote-extra-controls">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="addSecondaryQuoteBtn" onclick="showSecondaryQuoteFields('')">+ Add Secondary Quote</button>
+                                    <button type="button" class="btn btn-warning btn-sm" id="removeSecondaryQuoteBtn" onclick="hideSecondaryQuoteFields('')" style="display: none;">Remove Secondary Quote</button>
+                                </div>
+                            </div>
+                            <div class="form-group full-width quote-extra-section" id="secondaryQuoteSection" style="display: none;">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="quote_number_2">Secondary Quote Number</label>
+                                        <input type="text" id="quote_number_2" name="quote_number_2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="quote_date_2">Secondary Quote Date</label>
+                                        <input type="date" id="quote_date_2" name="quote_date_2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="quote_total_2">Secondary Quote Total</label>
+                                        <input type="number" step="0.01" id="quote_total_2" name="quote_total_2">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="quote_total">Quote Total</label>
+                                <input type="number" step="0.01" id="quote_total" name="quote_total">
+                            </div>
+                            <div class="form-group stage-nav-group">
+                                <label for="stage">Stage *</label>
+                                <div class="stage-controls">
+                                    <button type="button" class="btn-stage-nav" id="prevStageBtn" onclick="previousStage()" title="Previous Stage">
+                                        &lt;
+                                    </button>
+                                    <select id="stage" name="stage" required>
+                                        <!-- Populated by JavaScript -->
+                                    </select>
+                                    <button type="button" class="btn-stage-nav" id="nextStageBtn" onclick="nextStage()" title="Next Stage">
+                                        &gt;
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="priority_manual">Priority</label>
+                                <input type="number" id="priority_manual" name="priority_manual" min="0" max="100" placeholder="Auto-calculated if empty">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pre-Fit Door Details -->
+                    <div class="form-section" id="prefitSection" style="display: none;">
+                        <h3>Pre-Fit Door Details</h3>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="needs_prefit" name="needs_prefit" onchange="togglePrefitDetails()">
+                                    <span>Needs Pre-Fit</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="prefitDetails" style="display: none;">
+                            <div class="form-grid">
+                                <div class="form-group full-width">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="prefit_customer_brought_door" name="prefit_customer_brought_door" onchange="togglePrefitMeasurements()">
+                                        <span>Customer brought door to match (skip measurements)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div id="prefitMeasurements">
+                                <h4 style="margin-top: 1rem; color: var(--text-secondary);">Measurements & Details</h4>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="prefit_width">Door Width</label>
+                                        <input type="text" id="prefit_width" name="prefit_width" placeholder="inches">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_height">Door Height</label>
+                                        <input type="text" id="prefit_height" name="prefit_height" placeholder="inches">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_thickness">Thickness</label>
+                                        <select id="prefit_thickness" name="prefit_thickness">
+                                            <option value=""></option>
+                                            <option value='1-3/8"'>1-3/8"</option>
+                                            <option value='1-3/4"'>1-3/4"</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_lites">Lite(s)</label>
+                                        <input type="text" id="prefit_lites" name="prefit_lites" placeholder="Describe lite configuration">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label>Vents</label>
+                                        <div style="display: flex; gap: 1rem;">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="prefit_vent_top" name="prefit_vent_top">
+                                                <span>Top</span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="prefit_vent_bottom" name="prefit_vent_bottom">
+                                                <span>Bottom</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label>Hinge Locations (inches from top)</label>
+                                        <div style="display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; gap: 0.5rem; align-items: center;">
+                                            <span>Top:</span>
+                                            <input type="text" id="prefit_hinge_top" name="prefit_hinge_top" placeholder="inches">
+                                            <span>Mid:</span>
+                                            <input type="text" id="prefit_hinge_middle" name="prefit_hinge_middle" placeholder="inches">
+                                            <span>Bot:</span>
+                                            <input type="text" id="prefit_hinge_bottom" name="prefit_hinge_bottom" placeholder="inches">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_hinge_width">Hinge Width</label>
+                                        <select id="prefit_hinge_width" name="prefit_hinge_width">
+                                            <option value=""></option>
+                                            <option value='3"'>3"</option>
+                                            <option value='3-1/2"'>3-1/2"</option>
+                                            <option value='4"'>4"</option>
+                                            <option value='4-1/2"'>4-1/2"</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_hinge_backset">Hinge Backset</label>
+                                        <input type="text" id="prefit_hinge_backset" name="prefit_hinge_backset" placeholder="inches">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_hinge_radius">Hinge Radius</label>
+                                        <select id="prefit_hinge_radius" name="prefit_hinge_radius">
+                                            <option value=""></option>
+                                            <option value='1/4"'>1/4"</option>
+                                            <option value='5/8"'>5/8"</option>
+                                            <option value='Square'>Square</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_hinge_prep">Hinge Prep</label>
+                                        <select id="prefit_hinge_prep" name="prefit_hinge_prep">
+                                            <option value=""></option>
+                                            <option value="1741">1741</option>
+                                            <option value="1279">1279</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_bore_type">Bore Type</label>
+                                        <select id="prefit_bore_type" name="prefit_bore_type">
+                                            <option value=""></option>
+                                            <option value="Single">Single</option>
+                                            <option value="Double">Double</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label>Bore Locations (inches from top)</label>
+                                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center;">
+                                            <span>Single:</span>
+                                            <input type="text" id="prefit_bore_single" name="prefit_bore_single" placeholder="inches from top">
+                                            <span>Top:</span>
+                                            <input type="text" id="prefit_bore_top" name="prefit_bore_top" placeholder="top bore from top">
+                                            <span>Bottom:</span>
+                                            <input type="text" id="prefit_bore_bottom" name="prefit_bore_bottom" placeholder="bottom bore from top">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_bore_backset">Bore Backset</label>
+                                        <select id="prefit_bore_backset" name="prefit_bore_backset">
+                                            <option value=""></option>
+                                            <option value='2-3/8"'>2-3/8"</option>
+                                            <option value='2-3/4"'>2-3/4"</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_swing">Door Swing</label>
+                                        <select id="prefit_swing" name="prefit_swing">
+                                            <option value=""></option>
+                                            <option value="RHIS">RHIS</option>
+                                            <option value="RHOS">RHOS</option>
+                                            <option value="LHIS">LHIS</option>
+                                            <option value="LHOS">LHOS</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="prefit_notes">Pre-Fit Notes</label>
+                                        <textarea id="prefit_notes" name="prefit_notes" rows="3" placeholder="Special conditions, finish requirements, etc."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor & Product -->
+                    <div class="form-section">
+                        <h3>Vendor & Product</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="vendor">Vendor</label>
+                                <input type="text" id="vendor" name="vendor">
+                            </div>
+                            <div class="form-group">
+                                <label for="product_type">Product Type</label>
+                                <input type="text" id="product_type" name="product_type">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PO Information -->
+                    <div class="form-section">
+                        <h3>Purchase Order</h3>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label for="po_numbers">PO Number(s)</label>
+                                <textarea id="po_numbers" name="po_numbers" rows="2" placeholder="Enter one or many POs, separated by commas or new lines"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="po_date_signed">PO Date</label>
+                                <input type="date" id="po_date_signed" name="po_date_signed">
+                            </div>
+                            <div class="form-group">
+                                <label for="vendor_ack_number">Vendor Ack Number</label>
+                                <input type="text" id="vendor_ack_number" name="vendor_ack_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="eta_date">ETA Date</label>
+                                <input type="date" id="eta_date" name="eta_date">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoice -->
+                    <div class="form-section">
+                        <h3>Invoice</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="invoice_number">Invoice Number</label>
+                                <input type="text" id="invoice_number" name="invoice_number">
+                            </div>
+                            <div class="form-group">
+                                <label for="invoice_date">Invoice Date</label>
+                                <input type="date" id="invoice_date" name="invoice_date">
+                            </div>
+                            <div class="form-group">
+                                <label for="invoice_total">Invoice Total</label>
+                                <input type="number" step="0.01" id="invoice_total" name="invoice_total">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage Progress Tracking -->
+                    <div class="form-section" id="stageProgressSection" style="display: none;">
+                        <div class="stage-progress-header-row">
+                            <h3>Stage Progress Tracking</h3>
+                            <span id="stageProgressSummary" class="stage-progress-summary">0/0 complete</span>
+                        </div>
+                        <div class="stage-done-grid">
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="quote_done" name="quote_done" onchange="handleStageDoneChange('quote_done')">
+                                    <span>Quote Created</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="quote_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="signoff_done" name="signoff_done" onchange="handleStageDoneChange('signoff_done')">
+                                    <span>Signoff Received</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="signoff_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="invoice_done" name="invoice_done" onchange="handleStageDoneChange('invoice_done')">
+                                    <span>Invoice Created</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="invoice_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="costsheet_done" name="costsheet_done" onchange="handleStageDoneChange('costsheet_done')">
+                                    <span>Cost Sheet Prepared</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="costsheet_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="packet_done" name="packet_done" onchange="handleStageDoneChange('packet_done')">
+                                    <span>Packet to Buyer</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="packet_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="po_done" name="po_done" onchange="handleStageDoneChange('po_done')">
+                                    <span>PO Created</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="po_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="order_placed_done" name="order_placed_done" onchange="handleStageDoneChange('order_placed_done')">
+                                    <span>Order Placed</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="order_placed_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="ack_received_done" name="ack_received_done" onchange="handleStageDoneChange('ack_received_done')">
+                                    <span>Vendor Ack Received</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="ack_received_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="eta_confirmed_done" name="eta_confirmed_done" onchange="handleStageDoneChange('eta_confirmed_done')">
+                                    <span>ETA Confirmed</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="eta_confirmed_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="ship_ticket_done" name="ship_ticket_done" onchange="handleStageDoneChange('ship_ticket_done')">
+                                    <span>Ship Ticket Received</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="ship_ticket_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="transfer_done" name="transfer_done" onchange="handleStageDoneChange('transfer_done')">
+                                    <span>Transferred to Store</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="transfer_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="customer_arrival_notified_done" name="customer_arrival_notified_done" onchange="handleStageDoneChange('customer_arrival_notified_done')">
+                                    <span>Customer Notified</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="customer_arrival_notified_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="will_call_done" name="will_call_done" onchange="handleStageDoneChange('will_call_done')">
+                                    <span>Invoice to Will Call</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="will_call_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="door_shop_will_call_done" name="door_shop_will_call_done" onchange="handleStageDoneChange('door_shop_will_call_done')">
+                                    <span>Door Shop Will Call</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="door_shop_will_call_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="picked_up_done" name="picked_up_done" onchange="handleStageDoneChange('picked_up_done')">
+                                    <span>Picked Up</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="picked_up_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="closed_done" name="closed_done" onchange="handleStageDoneChange('closed_done')">
+                                    <span>Closed</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="closed_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="install_quote_done" name="install_quote_done" onchange="handleStageDoneChange('install_quote_done')">
+                                    <span>Install Quote Done</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="install_quote_done_timestamp"></span>
+                            </div>
+                            <div class="stage-done-item">
+                                <label>
+                                    <input type="checkbox" id="install_approved_done" name="install_approved_done" onchange="handleStageDoneChange('install_approved_done')">
+                                    <span>Install Approved</span>
+                                </label>
+                                <span class="stage-done-timestamp" id="install_approved_done_timestamp"></span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Attachments Section -->
+                <div class="form-section" id="attachmentsSection" style="display: none;">
+                    <h3>Attachments</h3>
+                    <div class="attachments-upload">
+                        <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileSelect(event)">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+                            📎 Add Files
+                        </button>
+                        <button type="button" class="btn btn-info" id="downloadAllBtn" onclick="downloadAllAttachments()" style="display: none;">
+                            📦 Download All
+                        </button>
+                        <span class="attachments-hint">Upload documents, photos, quotes, etc.</span>
+                    </div>
+                    <div id="attachmentsList" class="attachments-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Notes Section -->
+                <div class="form-section" id="notesSection" style="display: none;">
+                    <h3>Notes</h3>
+                    <div class="notes-add">
+                        <textarea id="newNoteText" placeholder="Add a note..." rows="3"></textarea>
+                        <button type="button" class="btn btn-primary" onclick="addNote()">
+                            📝 Add Note
+                        </button>
+                    </div>
+                    <div id="notesList" class="notes-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" id="backupOrderBtn" class="btn btn-info" onclick="backupOrder()" style="display: none;">
+                    💾 Backup
+                </button>
+                <button type="button" id="archiveOrderBtn" class="btn btn-warning" onclick="toggleArchiveOrder()" style="display: none;">
+                    Archive Order
+                </button>
+                <button type="button" id="modalDeleteOrderBtn" class="btn btn-danger" onclick="deleteCurrentOrder()" style="display: none;">
+                    Delete Order
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveOrder()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer History Modal -->
+    <div id="customerHistoryModal" class="modal">
+        <div class="modal-content customer-history-modal-content">
+            <div class="modal-header">
+                <h2 id="customerHistoryTitle">Customer History</h2>
+                <button class="modal-close" onclick="closeCustomerHistoryModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="customerHistoryList" class="customer-history-list">
+                    <div class="empty-state">Loading history...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCustomerHistoryModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Lookup Modal -->
+    <div id="customerLookupModal" class="modal">
+        <div class="modal-content customer-lookup-modal-content">
+            <div class="modal-header">
+                <h2>Customer Lookup</h2>
+                <button class="modal-close" onclick="closeCustomerLookupModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="customerLookupQuery">Search by name, phone, email, or account #</label>
+                    <input type="text" id="customerLookupQuery" placeholder="Start typing to find a customer..." autocomplete="off">
+                </div>
+                <p class="customer-lookup-hint">Tip: Click View Profile to review history before starting a new order.</p>
+                <div class="form-group checkbox-group" style="margin-top: -4px; margin-bottom: 10px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="customerLookupHasAccountOnly">
+                        <span>Only show customers with account numbers</span>
+                    </label>
+                </div>
+                <div id="customerLookupResults" class="customer-lookup-results">
+                    <div class="empty-state">Type at least 2 characters to search customers.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCustomerLookupModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Profile Modal -->
+    <div id="customerProfileModal" class="modal">
+        <div class="modal-content customer-profile-modal-content">
+            <div class="modal-header">
+                <h2 id="customerProfileTitle">Customer Profile</h2>
+                <button class="modal-close" onclick="closeCustomerProfileModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="customerProfileName">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" id="customerProfilePhone">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="text" id="customerProfileEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Account #</label>
+                        <input type="text" id="customerProfileNumber">
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Default Project Notes</label>
+                        <textarea id="customerProfileNotes" rows="3" placeholder="Notes to carry into future orders"></textarea>
+                    </div>
+                </div>
+
+                <div class="customer-profile-history-block">
+                    <h3>Order History</h3>
+                    <div id="customerProfileOrders" class="customer-profile-orders"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCustomerProfileModal()">Close</button>
+                <button type="button" class="btn btn-primary" onclick="useCurrentCustomerProfileForNewOrder()">Use for New Order</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomerProfile()">Save Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Themed Confirmation Modal -->
+    <div id="confirmDialogModal" class="modal">
+        <div class="modal-content confirm-dialog-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2 id="confirmDialogTitle">Confirm Action</h2>
+                <button class="modal-close" onclick="closeThemedConfirm(false)">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmDialogMessage" class="confirm-dialog-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeThemedConfirm(false)">Cancel</button>
+                <button type="button" id="confirmDialogConfirmBtn" class="btn btn-warning" onclick="closeThemedConfirm(true)">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reminders Modal -->
+    <div id="remindersModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>⏰ Reminders</h2>
+                <button class="modal-close" onclick="closeRemindersModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="reminders-actions">
+                    <button type="button" class="btn btn-primary" onclick="showAddReminderForm()">
+                        ➕ Add Reminder
+                    </button>
+                    <label class="checkbox-label" style="margin-left: auto;">
+                        <input type="checkbox" id="showCompletedReminders" onchange="loadReminders()">
+                        <span>Show Completed</span>
+                    </label>
+                </div>
+
+                <!-- Add Reminder Form (hidden by default) -->
+                <div id="addReminderForm" class="form-section" style="display: none;">
+                    <h3>New Reminder</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="reminder_title">Title *</label>
+                            <input type="text" id="reminder_title" placeholder="e.g. Call customer with ETA">
+                        </div>
+                        <div class="form-group">
+                            <label for="reminder_due_date">Due Date *</label>
+                            <input type="date" id="reminder_due_date">
+                        </div>
+                        <div class="form-group">
+                            <label for="reminder_due_time">Due Time *</label>
+                            <input type="time" id="reminder_due_time" value="09:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="reminder_repeat">Repeat</label>
+                            <select id="reminder_repeat">
+                                <option value="">(none)</option>
+                                <option value="DAILY">Daily</option>
+                                <option value="WEEKLY">Weekly</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="reminder_guest">Guest/Contact</label>
+                            <input type="text" id="reminder_guest" placeholder="Name or phone">
+                        </div>
+                        <div class="form-group">
+                            <label for="reminder_order_id">Link to Order (optional)</label>
+                            <input type="number" id="reminder_order_id" placeholder="Order ID">
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-primary" onclick="saveNewReminder()">Save Reminder</button>
+                        <button type="button" class="btn btn-secondary" onclick="cancelAddReminder()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Reminders List -->
+                <div id="remindersList" class="reminders-list-view">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeRemindersModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OCR Import / Bulk Import Modal -->
+    <div id="ocrModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📦 Bulk Import</h2>
+                <button class="modal-close" onclick="closeOCRModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: var(--padding-medium);">
+                    Upload a JSON bulk import file to import multiple orders at once. Duplicate detection automatically prevents re-importing existing orders.
+                </p>
+                
+                <div class="form-section">
+                    <h3>Upload File</h3>
+                    <div style="display: flex; flex-direction: column; gap: var(--padding-medium);">
+                        <input type="file" id="ocrFileInput" accept=".json,image/*,.pdf" style="display: none;" onchange="handleOCRFile(event)">
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('ocrFileInput').click()">
+                            📁 Choose File
+                        </button>
+                        <div style="background: var(--surface-elevated); padding: var(--padding-small); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);">
+                            <strong>Supported formats:</strong><br>
+                            • <strong>.json</strong> - Bulk import files (fully functional)<br>
+                            • <strong>Images/PDFs</strong> - OCR processing (requires Tesseract setup)
+                        </div>
+                        <div id="ocrFileName" style="color: var(--text-muted); font-size: var(--font-size-sm);"></div>
+                        <div id="ocrProgress" style="display: none;">
+                            <div style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 8px;">Processing...</div>
+                            <div style="background-color: var(--card-bg); border-radius: var(--radius-small); overflow: hidden;">
+                                <div id="ocrProgressBar" style="background-color: var(--primary); height: 4px; width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <h3>Instructions</h3>
+                    <ul style="color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6;">
+                        <li>Supported formats: JPG, PNG, PDF</li>
+                        <li>Ensure the document is clear and well-lit</li>
+                        <li>OCR will attempt to extract: customer name, phone, vendor, PO number, etc.</li>
+                        <li>Review and correct extracted data before saving</li>
+                    </ul>
+                </div>
+                
+                <div class="form-section" style="background-color: var(--card-bg); padding: var(--padding-medium); border-radius: var(--radius-small); border: 1px dashed var(--border);">
+                    <strong>Note:</strong> Full OCR functionality requires server-side processing. This feature is a placeholder for future implementation.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeOCRModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="backToTopBtn" class="back-to-top-btn" type="button" title="Back to beginning stage">
+        ↑ Top
+    </button>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

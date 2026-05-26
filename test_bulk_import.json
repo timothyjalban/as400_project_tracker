@@ -1,0 +1,42 @@
+{
+  "customer_info": {
+    "customer_name": "Test Bulk Customer",
+    "phone": "555-1234",
+    "email": "test@example.com",
+    "project": "Test Bulk Project"
+  },
+  "items": [
+    {
+      "row_number": 1,
+      "quantity": "1",
+      "width": "36\"",
+      "height": "80\"",
+      "config": "6 Panel",
+      "jamb_size": "4-9/16\"",
+      "swing": "LH",
+      "hinges": "3.5\" x 3.5\"",
+      "boring": "Standard",
+      "sill_bottom": "Oak",
+      "color_finish": "White",
+      "glass_type": "Clear",
+      "hardware": "Lever Handle",
+      "special_notes": "Test door 1"
+    },
+    {
+      "row_number": 2,
+      "quantity": "2",
+      "width": "32\"",
+      "height": "80\"",
+      "config": "Flush",
+      "jamb_size": "4-9/16\"",
+      "swing": "RH",
+      "hinges": "3.5\" x 3.5\"",
+      "boring": "Privacy",
+      "sill_bottom": "Pine",
+      "color_finish": "Primed",
+      "glass_type": "N/A",
+      "hardware": "Knob",
+      "special_notes": "Test door 2"
+    }
+  ]
+}
