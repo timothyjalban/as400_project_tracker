@@ -4916,6 +4916,7 @@ const remindersBtn = document.getElementById('remindersBtn');
 let notificationPermission = 'default';
 let reminderCheckInterval = null;
 let lastShownReminderIds = new Set();
+let editingReminderId = null;
 
 // Initialize reminders button listener
 if (remindersBtn) {
@@ -5028,6 +5029,7 @@ function closeRemindersModal() {
 
 function showAddReminderForm() {
     document.getElementById('addReminderForm').style.display = 'block';
+    updateReminderFormMode();
     // Set default date to tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -5070,6 +5072,8 @@ function prefillReminderFormForOrder(order, force = false) {
 
 function cancelAddReminder() {
     document.getElementById('addReminderForm').style.display = 'none';
+    editingReminderId = null;
+    updateReminderFormMode();
     // Clear form
     document.getElementById('reminder_title').value = '';
     document.getElementById('reminder_due_date').value = '';
@@ -5077,6 +5081,67 @@ function cancelAddReminder() {
     document.getElementById('reminder_repeat').value = '';
     document.getElementById('reminder_guest').value = '';
     document.getElementById('reminder_order_id').value = '';
+}
+
+function updateReminderFormMode() {
+    const formTitle = document.getElementById('reminderFormTitle');
+    const saveBtn = document.getElementById('saveReminderBtn');
+
+    if (formTitle) {
+        formTitle.textContent = editingReminderId ? 'Edit Reminder' : 'New Reminder';
+    }
+    if (saveBtn) {
+        saveBtn.textContent = editingReminderId ? 'Update Reminder' : 'Save Reminder';
+    }
+}
+
+function formatDateForInput(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function formatTimeForInput(date) {
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+}
+
+async function editReminder(reminderId) {
+    try {
+        const response = await fetch(`${API_BASE}/reminders/${reminderId}`);
+        const result = await response.json();
+
+        if (!result.success || !result.reminder) {
+            showError(result.error || 'Failed to load reminder');
+            return;
+        }
+
+        const reminder = result.reminder;
+        const dueDate = new Date(reminder.due_at);
+
+        openRemindersModal();
+        showAddReminderForm();
+
+        editingReminderId = reminder.id;
+        updateReminderFormMode();
+
+        document.getElementById('reminder_title').value = reminder.title || '';
+        document.getElementById('reminder_repeat').value = reminder.repeat || '';
+        document.getElementById('reminder_guest').value = reminder.guest || '';
+        document.getElementById('reminder_order_id').value = reminder.order_id || '';
+
+        if (!Number.isNaN(dueDate.getTime())) {
+            document.getElementById('reminder_due_date').value = formatDateForInput(dueDate);
+            document.getElementById('reminder_due_time').value = formatTimeForInput(dueDate);
+        }
+
+        document.getElementById('reminder_title').focus();
+    } catch (error) {
+        console.error('Error loading reminder for edit:', error);
+        showError('Failed to load reminder for edit');
+    }
 }
 
 // Quick add reminder for current order (from order details panel)
@@ -5167,6 +5232,7 @@ function displayOrderReminders(reminders) {
                 </div>
                 <div class="reminder-compact-actions">
                     ${!isCompleted ? `<button class="btn-icon" onclick="completeReminder(${reminder.id})" title="Complete">✓</button>` : ''}
+                    <button class="btn-icon" onclick="editReminder(${reminder.id})" title="Edit">✏️</button>
                     <button class="btn-icon" onclick="deleteReminder(${reminder.id})" title="Delete">🗑️</button>
                 </div>
             </div>
@@ -5207,8 +5273,12 @@ async function saveNewReminder() {
     };
     
     try {
-        const response = await fetch(`${API_BASE}/reminders`, {
-            method: 'POST',
+        const isEdit = Boolean(editingReminderId);
+        const url = isEdit ? `${API_BASE}/reminders/${editingReminderId}` : `${API_BASE}/reminders`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -5218,7 +5288,7 @@ async function saveNewReminder() {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Reminder created successfully!');
+            showToast(isEdit ? 'Reminder updated successfully!' : 'Reminder created successfully!');
             cancelAddReminder();
             loadReminders();
             loadOrderReminders();
@@ -5296,11 +5366,13 @@ function renderReminders(reminders) {
         if (!isCompleted) {
             actionsHtml = `
                 <button class="btn btn-sm btn-success" onclick="completeReminder(${reminder.id})">✓ Complete</button>
+                <button class="btn btn-sm btn-secondary" onclick="editReminder(${reminder.id})">✏️ Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="snoozeReminder(${reminder.id})">💤 Snooze</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteReminder(${reminder.id})">🗑️ Delete</button>
             `;
         } else {
             actionsHtml = `
+                <button class="btn btn-sm btn-secondary" onclick="editReminder(${reminder.id})">✏️ Edit</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteReminder(${reminder.id})">🗑️ Delete</button>
             `;
         }
@@ -5323,31 +5395,34 @@ function renderReminders(reminders) {
 
 function formatReminderDate(date) {
     const now = new Date();
-    const diffMs = date - now;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffMs < 0) {
-        // Overdue
-        const absDays = Math.abs(diffDays);
-        if (absDays === 0) {
-            return `Today at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})} (OVERDUE)`;
-        } else if (absDays === 1) {
-            return `Yesterday at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})} (OVERDUE)`;
-        } else {
-            return `${absDays} days ago (OVERDUE)`;
+    const dayMs = 1000 * 60 * 60 * 24;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDue = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayDiff = Math.round((startOfDue - startOfToday) / dayMs);
+    const timeText = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    // Overdue is based on actual timestamp, but labels use calendar day buckets.
+    if (date < now) {
+        if (dayDiff === 0) {
+            return `Today at ${timeText} (OVERDUE)`;
         }
-    } else {
-        // Future
-        if (diffDays === 0) {
-            return `Today at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
-        } else if (diffDays === 1) {
-            return `Tomorrow at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
-        } else if (diffDays < 7) {
-            return `${date.toLocaleDateString('en-US', {weekday: 'long'})} at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
-        } else {
-            return `${date.toLocaleDateString()} at ${date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
+        if (dayDiff === -1) {
+            return `Yesterday at ${timeText} (OVERDUE)`;
         }
+        return `${Math.abs(dayDiff)} days ago (OVERDUE)`;
     }
+
+    if (dayDiff === 0) {
+        return `Today at ${timeText}`;
+    }
+    if (dayDiff === 1) {
+        return `Tomorrow at ${timeText}`;
+    }
+    if (dayDiff > 1 && dayDiff < 7) {
+        return `${date.toLocaleDateString('en-US', { weekday: 'long' })} at ${timeText}`;
+    }
+
+    return `${date.toLocaleDateString()} at ${timeText}`;
 }
 
 async function completeReminder(reminderId) {
