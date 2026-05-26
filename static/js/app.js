@@ -189,6 +189,14 @@ const INLINE_ORDER_FIELDS = {
     invoice_number: 'inline_invoice_number',
     invoice_date: 'inline_invoice_date',
     invoice_total: 'inline_invoice_total',
+    install_street: 'inline_install_street',
+    install_city: 'inline_install_city',
+    install_state: 'inline_install_state',
+    install_zip: 'inline_install_zip',
+    delivery_street: 'inline_delivery_street',
+    delivery_city: 'inline_delivery_city',
+    delivery_state: 'inline_delivery_state',
+    delivery_zip: 'inline_delivery_zip',
     vendor: 'inline_vendor',
     product_type: 'inline_product_type',
     line_items: 'inline_line_items',
@@ -201,7 +209,7 @@ const INLINE_ORDER_FIELDS = {
 
 const STAGE_SMART_FIELD_MAP = {
     ORDER_DETAILS: ['customer_name', 'customer_phone', 'customer_email', 'project_name', 'stage', 'priority_manual'],
-    QUOTE_CREATED: ['quote_number', 'quote_date', 'quote_total', 'quote_done'],
+    QUOTE_CREATED: ['quote_number', 'quote_date', 'quote_total', 'install_street', 'install_city', 'install_state', 'install_zip', 'delivery_street', 'delivery_city', 'delivery_state', 'delivery_zip', 'quote_done'],
     QUOTE_SIGNOFF_RECEIVED: ['signoff_done'],
     INVOICE_CREATED: ['invoice_number', 'invoice_date', 'invoice_total', 'invoice_done'],
     COST_SHEET_PREPARED: ['costsheet_done'],
@@ -340,8 +348,6 @@ function syncPriorityInputWithStage(stageElement, priorityElement, previousStage
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Order Tracker initialized');
-    
     // Load stages for filter dropdown
     loadStages();
 
@@ -1179,7 +1185,6 @@ async function loadContacts() {
         
         if (data.success) {
             knownContacts = data.contacts;
-            console.log(`Loaded ${knownContacts.length} known contacts`);
         }
     } catch (error) {
         console.error('Error loading contacts:', error);
@@ -2997,6 +3002,8 @@ function showOrderModal(order) {
         'customer_name', 'customer_phone', 'customer_email', 'project_name',
         'customer_number',
         'quote_number', 'quote_date', 'quote_number_2', 'quote_date_2', 'quote_total_2', 'quote_total',
+        'install_street', 'install_city', 'install_state', 'install_zip',
+        'delivery_street', 'delivery_city', 'delivery_state', 'delivery_zip',
         'vendor', 'product_type',
         'po_numbers', 'po_date_signed', 'vendor_ack_number', 'eta_date',
         'invoice_number', 'invoice_date', 'invoice_total',
@@ -5390,11 +5397,9 @@ async function checkDesktopHelper() {
         if (desktopHelperAvailable) {
             statusElement.className = 'helper-status available';
             statusTextElement.textContent = '🤖 Automation Ready';
-            console.log('✅ Desktop helper available - full automation enabled');
         } else {
             statusElement.className = 'helper-status unavailable';
             statusTextElement.textContent = '⚠️ Manual Mode';
-            console.log('⚠️ Desktop helper not responding correctly');
         }
         
         return desktopHelperAvailable;
@@ -5402,7 +5407,6 @@ async function checkDesktopHelper() {
         desktopHelperAvailable = false;
         statusElement.className = 'helper-status unavailable';
         statusTextElement.textContent = '⚠️ Manual Mode';
-        console.log('⚠️ Desktop helper not available - manual mode only');
         return false;
     }
 }
@@ -5414,6 +5418,63 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(checkDesktopHelper, 30000);
 });
 
+function getLineItemsForAutomation(actionOrder) {
+    // Prefer in-memory editor values for the currently open order so prompt fields
+    // reflect unsaved product edits.
+    if (currentOrder && currentOrder.id === actionOrder.id && Array.isArray(currentLineItems) && currentLineItems.length > 0) {
+        return currentLineItems.map(item => ({ ...item }));
+    }
+
+    if (Array.isArray(actionOrder.line_items)) {
+        return actionOrder.line_items.map(item => ({ ...item }));
+    }
+
+    if (actionOrder.line_items) {
+        try {
+            const parsed = JSON.parse(actionOrder.line_items);
+            return Array.isArray(parsed) ? parsed.map(item => ({ ...item })) : [];
+        } catch (error) {
+            console.warn('Could not parse line_items for automation payload', error);
+        }
+    }
+
+    return [];
+}
+
+function mapLineItemForAs400Automation(item) {
+    const quantity = Number.parseInt(item.quantity || '1', 10) || 1;
+    const width = String(item.width || '').trim();
+    const height = String(item.height || '').trim();
+    const sizeText = String(item.size || '').trim() || (width && height ? `${width} x ${height}` : '');
+    const operationText = String(item.operation || item.operation_style || item.handing || '').trim();
+    const locationText = String(item.location || item.room || '').trim();
+    const descriptionText = String(item.description || '').trim() || [locationText, operationText, sizeText].filter(Boolean).join(' | ');
+
+    return {
+        ...item,
+        item_type: item.type || item.item_type || item.product || '',
+        type: item.type || item.item_type || item.product || '',
+        product: item.product || (String(item.type || '').toLowerCase().includes('window') ? 'Window' : 'Door'),
+        handing: operationText,
+        operation: operationText,
+        operation_style: operationText,
+        location: locationText,
+        room: item.room || locationText,
+        description: descriptionText,
+        size: sizeText,
+        model: item.model || item.series || item.style || '',
+        series: item.series || item.style || '',
+        finish: item.finish || item.material || '',
+        width,
+        height,
+        quantity,
+        vendor_sku: item.vendor_sku || item.sku || '',
+        sku: item.sku || item.vendor_sku || '',
+        unit_price: item.unit_price || item.price || '',
+        price: item.price || item.unit_price || ''
+    };
+}
+
 async function createQuote() {
     const actionOrder = currentOrder && currentOrder.id ? currentOrder : getSelectedOrder();
     if (!actionOrder || !actionOrder.id) {
@@ -5424,49 +5485,7 @@ async function createQuote() {
     // Keep currentOrder in sync so existing helper paths continue to work.
     currentOrder = actionOrder;
 
-    const getLineItemsForAutomation = () => {
-        // Prefer in-memory editor values for the currently open order so prompt fields
-        // reflect unsaved product edits.
-        if (currentOrder && currentOrder.id === actionOrder.id && Array.isArray(currentLineItems) && currentLineItems.length > 0) {
-            return currentLineItems.map(item => ({ ...item }));
-        }
-
-        if (Array.isArray(actionOrder.line_items)) {
-            return actionOrder.line_items.map(item => ({ ...item }));
-        }
-
-        if (actionOrder.line_items) {
-            try {
-                const parsed = JSON.parse(actionOrder.line_items);
-                return Array.isArray(parsed) ? parsed.map(item => ({ ...item })) : [];
-            } catch (error) {
-                console.warn('Could not parse line_items for quote automation payload', error);
-            }
-        }
-
-        return [];
-    };
-
-    const mapLineItemForAs400Prompt = (item) => {
-        const mapped = {
-            ...item,
-            item_type: item.type || item.item_type || item.product || '',
-            operation_style: item.operation || item.operation_style || '',
-            model: item.model || item.series || item.style || '',
-            series: item.series || item.style || '',
-            finish: item.finish || item.material || '',
-            width: item.width || '',
-            height: item.height || '',
-            quantity: item.quantity || 1,
-            vendor_sku: item.vendor_sku || item.sku || '',
-            sku: item.sku || item.vendor_sku || '',
-            unit_price: item.unit_price || item.price || '',
-            price: item.price || item.unit_price || ''
-        };
-        return mapped;
-    };
-
-    const lineItemsForAutomation = getLineItemsForAutomation().map(mapLineItemForAs400Prompt);
+    const lineItemsForAutomation = getLineItemsForAutomation(actionOrder).map(mapLineItemForAs400Automation);
     const fallbackVendorSku = lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '';
     
     // Check if desktop helper is available
@@ -5582,28 +5601,7 @@ async function createInvoice() {
 
     currentOrder = actionOrder;
 
-    const getLineItemsForAutomation = () => {
-        if (currentOrder && currentOrder.id === actionOrder.id && Array.isArray(currentLineItems) && currentLineItems.length > 0) {
-            return currentLineItems.map(item => ({ ...item }));
-        }
-
-        if (Array.isArray(actionOrder.line_items)) {
-            return actionOrder.line_items.map(item => ({ ...item }));
-        }
-
-        if (actionOrder.line_items) {
-            try {
-                const parsed = JSON.parse(actionOrder.line_items);
-                return Array.isArray(parsed) ? parsed.map(item => ({ ...item })) : [];
-            } catch (error) {
-                console.warn('Could not parse line_items for invoice automation payload', error);
-            }
-        }
-
-        return [];
-    };
-
-    const lineItemsForAutomation = getLineItemsForAutomation();
+    const lineItemsForAutomation = getLineItemsForAutomation(actionOrder).map(mapLineItemForAs400Automation);
     const fallbackVendorSku = lineItemsForAutomation.find(item => item?.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '';
     
     const helperAvailable = await checkDesktopHelper();
