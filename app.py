@@ -221,6 +221,10 @@ def ensure_orders_schema(conn):
         conn.execute("ALTER TABLE orders ADD COLUMN quote_total_2 REAL")
         conn.commit()
 
+    if 'vendor_ack_total' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN vendor_ack_total REAL")
+        conn.commit()
+
     if 'additional_quotes' not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN additional_quotes TEXT")
         conn.commit()
@@ -237,7 +241,7 @@ def ensure_orders_schema(conn):
         conn.execute("ALTER TABLE orders ADD COLUMN customer_profile_id INTEGER")
         conn.commit()
 
-    # Install stage timestamps and install/delivery address fields.
+    # Install stage timestamps and generic address fields.
 
     if 'install_quote_done_at' not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN install_quote_done_at TEXT")
@@ -277,6 +281,22 @@ def ensure_orders_schema(conn):
 
     if 'delivery_zip' not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN delivery_zip TEXT")
+        conn.commit()
+
+    if 'address_street' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN address_street TEXT")
+        conn.commit()
+
+    if 'address_city' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN address_city TEXT")
+        conn.commit()
+
+    if 'address_state' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN address_state TEXT")
+        conn.commit()
+
+    if 'address_zip' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN address_zip TEXT")
         conn.commit()
 
     # Backfill po_numbers for legacy rows that only used po_number.

@@ -597,6 +597,16 @@ body {
     cursor: pointer;
 }
 
+.order-status-chip.address {
+    background-color: rgba(0, 150, 136, 0.2);
+    color: #b2dfdb;
+    border: 1px solid rgba(0, 150, 136, 0.45);
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .order-list-id {
     color: var(--text-secondary);
     font-size: var(--font-size-sm);

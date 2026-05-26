@@ -189,14 +189,10 @@ const INLINE_ORDER_FIELDS = {
     invoice_number: 'inline_invoice_number',
     invoice_date: 'inline_invoice_date',
     invoice_total: 'inline_invoice_total',
-    install_street: 'inline_install_street',
-    install_city: 'inline_install_city',
-    install_state: 'inline_install_state',
-    install_zip: 'inline_install_zip',
-    delivery_street: 'inline_delivery_street',
-    delivery_city: 'inline_delivery_city',
-    delivery_state: 'inline_delivery_state',
-    delivery_zip: 'inline_delivery_zip',
+    address_street: 'inline_address_street',
+    address_city: 'inline_address_city',
+    address_state: 'inline_address_state',
+    address_zip: 'inline_address_zip',
     vendor: 'inline_vendor',
     product_type: 'inline_product_type',
     line_items: 'inline_line_items',
@@ -204,19 +200,20 @@ const INLINE_ORDER_FIELDS = {
     po_numbers: 'inline_po_numbers',
     po_date_signed: 'inline_po_date_signed',
     vendor_ack_number: 'inline_vendor_ack_number',
+    vendor_ack_total: 'inline_vendor_ack_total',
     eta_date: 'inline_eta_date'
 };
 
 const STAGE_SMART_FIELD_MAP = {
     ORDER_DETAILS: ['customer_name', 'customer_phone', 'customer_email', 'project_name', 'stage', 'priority_manual'],
-    QUOTE_CREATED: ['quote_number', 'quote_date', 'quote_total', 'install_street', 'install_city', 'install_state', 'install_zip', 'delivery_street', 'delivery_city', 'delivery_state', 'delivery_zip', 'quote_done'],
+    QUOTE_CREATED: ['quote_number', 'quote_date', 'quote_total', 'quote_done'],
     QUOTE_SIGNOFF_RECEIVED: ['signoff_done'],
     INVOICE_CREATED: ['invoice_number', 'invoice_date', 'invoice_total', 'invoice_done'],
     COST_SHEET_PREPARED: ['costsheet_done'],
     PACKET_TO_BUYER: ['packet_done'],
     PO_CREATED: ['po_numbers', 'po_date_signed', 'vendor', 'po_done'],
     ORDER_PLACED_WITH_VENDOR: ['po_numbers', 'vendor', 'order_placed_done'],
-    VENDOR_ACK_RECEIVED: ['vendor_ack_number', 'vendor', 'ack_received_done'],
+    VENDOR_ACK_RECEIVED: ['vendor_ack_number', 'vendor_ack_total', 'vendor', 'ack_received_done'],
     ETA_CONFIRMED: ['eta_date', 'vendor', 'eta_confirmed_done'],
     SHIP_TICKET_RECEIVED: ['ship_ticket_done'],
     TRANSFERRED_TO_STORE: ['transfer_location', 'transfer_done'],
@@ -251,6 +248,10 @@ const STAGE_DONE_FIELDS = {
     'install_quote_done': 'install_quote_done_at',
     'install_approved_done': 'install_approved_done_at'
 };
+
+const OPTIONAL_STAGE_FIELDS = new Set([
+    'vendor_ack_total'
+]);
 
 const STAGE_COMPLETION_FIELD_BY_STAGE = {
     QUOTE_CREATED: 'quote_done_at',
@@ -1514,6 +1515,7 @@ function renderOrdersTable(orders) {
         const isPinned = Number(order.is_pinned || 0) === 1;
         const isFlagged = Number(order.is_flagged || 0) === 1;
         const hasCustomerNumber = Boolean(String(order.customer_number || '').trim());
+        const streetOnlyAddress = getStreetOnlyAddress(order);
         const itemClasses = [
             'order-list-item',
             isActive ? 'active' : '',
@@ -1529,8 +1531,10 @@ function renderOrdersTable(orders) {
                         ${isPinned ? '<span class="order-status-chip pinned" title="Pinned">Pinned</span>' : ''}
                         ${isFlagged ? '<span class="order-status-chip flagged" title="Flagged">Flagged</span>' : ''}
                         ${hasCustomerNumber ? `<span class="order-status-chip account" title="Copy account number" onclick="copyOrderAccountNumber(event, '${encodeURIComponent(String(order.customer_number || ''))}')">Acct ${escapeHtml(order.customer_number)}</span>` : ''}
+                        ${streetOnlyAddress ? `<span class="order-status-chip address" title="${escapeHtml(streetOnlyAddress)}">${escapeHtml(streetOnlyAddress)}</span>` : ''}
                     </div>
                     <div class="order-list-actions">
+                        <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
                         <button class="order-icon-btn ${isPinned ? 'active' : ''}" title="${isPinned ? 'Unpin order' : 'Pin order'}" onclick="toggleOrderPin(event, ${order.id})">📌</button>
                         <button class="order-icon-btn ${isFlagged ? 'active' : ''}" title="${isFlagged ? 'Unflag order' : 'Flag order'}" onclick="toggleOrderFlag(event, ${order.id})">🚩</button>
                         <span class="order-list-id">#${order.id || ''}</span>
@@ -1572,6 +1576,7 @@ function renderCompletedOrders(orders) {
     completedOrdersList.innerHTML = orders.map(order => {
         const isActive = order.id === selectedOrderId;
         const hasCustomerNumber = Boolean(String(order.customer_number || '').trim());
+        const streetOnlyAddress = getStreetOnlyAddress(order);
         const itemClasses = ['order-list-item', 'completed-order-item', isActive ? 'active' : '']
             .filter(Boolean)
             .join(' ');
@@ -1583,8 +1588,12 @@ function renderCompletedOrders(orders) {
                         <span class="order-list-customer">${escapeHtml(order.customer_name || 'Unnamed Customer')}</span>
                         <span class="order-status-chip completed" title="Completed">Completed</span>
                         ${hasCustomerNumber ? `<span class="order-status-chip account" title="Copy account number" onclick="copyOrderAccountNumber(event, '${encodeURIComponent(String(order.customer_number || ''))}')">Acct ${escapeHtml(order.customer_number)}</span>` : ''}
+                        ${streetOnlyAddress ? `<span class="order-status-chip address" title="${escapeHtml(streetOnlyAddress)}">${escapeHtml(streetOnlyAddress)}</span>` : ''}
                     </div>
-                    <span class="order-list-id">#${order.id || ''}</span>
+                    <div class="order-list-actions">
+                        <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
+                        <span class="order-list-id">#${order.id || ''}</span>
+                    </div>
                 </div>
                 <div class="order-list-project">${escapeHtml(order.project_name || 'No project name')}</div>
                 <div class="order-list-meta">
@@ -1599,6 +1608,18 @@ function renderCompletedOrders(orders) {
 function getSelectedOrder() {
     if (!selectedOrderId) return null;
     return allOrders.find(order => order.id === selectedOrderId) || null;
+}
+
+function getStreetOnlyAddress(order) {
+    if (!order) return '';
+
+    const rawAddress = String(
+        order.address_street || order.delivery_street || order.install_street || ''
+    ).trim();
+
+    if (!rawAddress) return '';
+
+    return rawAddress.split(',')[0].trim();
 }
 
 async function hydrateOrderFromServer(orderId) {
@@ -1837,6 +1858,31 @@ function toggleOrderFlag(event, orderId) {
     updateOrderListBoolean(orderId, 'is_flagged', nextValue, nextValue ? 'Order flagged' : 'Order unflagged');
 }
 
+function openReminderForOrder(event, orderId) {
+    event.stopPropagation();
+
+    const order = allOrders.find(item => item.id === orderId);
+    if (!order) {
+        showError('Order not found for reminder');
+        return;
+    }
+
+    cancelAddReminder();
+    openRemindersModal();
+    showAddReminderForm();
+    prefillReminderFormForOrder(order, true);
+
+    const saveBtn = document.getElementById('saveReminderBtn');
+    if (saveBtn) {
+        saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const titleInput = document.getElementById('reminder_title');
+    if (titleInput) {
+        titleInput.focus();
+    }
+}
+
 function renderSalesProcess(order) {
     if (!processEmpty || !processContent) return;
 
@@ -1858,10 +1904,12 @@ function renderSalesProcess(order) {
 
     processOrderTitle.textContent = `${order.customer_name || 'Customer'} - Order #${order.id}`;
     const accountNumber = String(order.customer_number || '').trim();
+    const streetOnlyAddress = getStreetOnlyAddress(order);
     processOrderMeta.innerHTML = `
         <span class="process-order-meta-item">Project: ${escapeHtml(order.project_name || 'No project')}</span>
         <span class="process-order-meta-item">PO(s): ${escapeHtml(order.po_numbers_display || order.po_numbers || order.po_number || 'Not assigned')}</span>
         ${accountNumber ? `<span class="process-order-meta-item account-copy" title="Copy account number" onclick="copyCustomerLookupValueFromEncoded('${encodeURIComponent(accountNumber)}', 'account number')">Acct #: ${escapeHtml(accountNumber)}</span>` : ''}
+        ${streetOnlyAddress ? `<span class="process-order-meta-item">Address: ${escapeHtml(streetOnlyAddress)}</span>` : ''}
     `;
     processCurrentStage.textContent = formatStageLabel(order.stage || 'Not set');
     processProgressValue.textContent = `${currentPosition}/${totalStages}`;
@@ -1946,6 +1994,10 @@ function isStageComplete(stage, order) {
     if (stageFields.length === 0) return false;
 
     return stageFields.every(fieldName => {
+        if (OPTIONAL_STAGE_FIELDS.has(fieldName)) {
+            return true;
+        }
+
         // Checkbox-backed fields must have saved timestamp values.
         if (Object.prototype.hasOwnProperty.call(STAGE_DONE_FIELDS, fieldName)) {
             const timestampField = STAGE_DONE_FIELDS[fieldName];
@@ -2148,6 +2200,10 @@ function getStageMissingFields(stage, order) {
     }
 
     return stageFields.filter(fieldName => {
+        if (OPTIONAL_STAGE_FIELDS.has(fieldName)) {
+            return false;
+        }
+
         if (Object.prototype.hasOwnProperty.call(STAGE_DONE_FIELDS, fieldName)) {
             const timestampField = STAGE_DONE_FIELDS[fieldName];
             return !order[timestampField];
@@ -2187,6 +2243,7 @@ function getStageFieldDisplayName(fieldName) {
         po_done: 'PO Done',
         vendor: 'Vendor',
         vendor_ack_number: 'Vendor Ack #',
+        vendor_ack_total: 'Vendor Ack Total',
         ack_received_done: 'Ack Received',
         eta_date: 'ETA Date',
         eta_confirmed_done: 'ETA Confirmed',
@@ -2878,6 +2935,7 @@ function collectInlineOrderFormData() {
     if (data.quote_total) data.quote_total = parseFloat(data.quote_total);
     if (data.quote_total_2) data.quote_total_2 = parseFloat(data.quote_total_2);
     if (data.invoice_total) data.invoice_total = parseFloat(data.invoice_total);
+    if (data.vendor_ack_total) data.vendor_ack_total = parseFloat(data.vendor_ack_total);
     if (data.priority_manual) data.priority_manual = parseInt(data.priority_manual, 10);
 
     // Inline form is hidden; never let a stale hidden select reset stage.
@@ -3002,10 +3060,9 @@ function showOrderModal(order) {
         'customer_name', 'customer_phone', 'customer_email', 'project_name',
         'customer_number',
         'quote_number', 'quote_date', 'quote_number_2', 'quote_date_2', 'quote_total_2', 'quote_total',
-        'install_street', 'install_city', 'install_state', 'install_zip',
-        'delivery_street', 'delivery_city', 'delivery_state', 'delivery_zip',
+        'address_street', 'address_city', 'address_state', 'address_zip',
         'vendor', 'product_type',
-        'po_numbers', 'po_date_signed', 'vendor_ack_number', 'eta_date',
+        'po_numbers', 'po_date_signed', 'vendor_ack_number', 'vendor_ack_total', 'eta_date',
         'invoice_number', 'invoice_date', 'invoice_total',
         'priority_manual',
         'prefit_width', 'prefit_height', 'prefit_thickness', 'prefit_lites',
@@ -3236,6 +3293,7 @@ async function saveOrder() {
         if (data.quote_total) data.quote_total = parseFloat(data.quote_total);
         if (data.quote_total_2) data.quote_total_2 = parseFloat(data.quote_total_2);
         if (data.invoice_total) data.invoice_total = parseFloat(data.invoice_total);
+        if (data.vendor_ack_total) data.vendor_ack_total = parseFloat(data.vendor_ack_total);
         if (data.customer_profile_id) {
             const parsedProfileId = parseInt(data.customer_profile_id, 10);
             data.customer_profile_id = Number.isNaN(parsedProfileId) ? null : parsedProfileId;
@@ -4973,7 +5031,41 @@ function showAddReminderForm() {
     // Set default date to tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    document.getElementById('reminder_due_date').value = tomorrow.toISOString().split('T')[0];
+    const dueDateInput = document.getElementById('reminder_due_date');
+    if (dueDateInput && !dueDateInput.value) {
+        dueDateInput.value = tomorrow.toISOString().split('T')[0];
+    }
+}
+
+function prefillReminderFormForOrder(order, force = false) {
+    if (!order || !order.id) return;
+
+    const titleInput = document.getElementById('reminder_title');
+    const guestInput = document.getElementById('reminder_guest');
+    const orderIdInput = document.getElementById('reminder_order_id');
+
+    const customerName = String(order.customer_name || '').trim();
+    const projectName = String(order.project_name || '').trim();
+    const poRaw = String(order.po_numbers_display || order.po_numbers || order.po_number || '').trim();
+    const firstPo = poRaw ? poRaw.split(/[,\n]/)[0].trim() : '';
+
+    if (orderIdInput) {
+        orderIdInput.value = order.id;
+    }
+
+    if (guestInput && (force || !guestInput.value)) {
+        guestInput.value = customerName || String(order.customer_phone || '').trim();
+    }
+
+    if (titleInput && (force || !titleInput.value)) {
+        const titleParts = [];
+        if (customerName) titleParts.push(customerName);
+        if (projectName) titleParts.push(projectName);
+        if (firstPo) titleParts.push(`PO ${firstPo}`);
+        titleInput.value = titleParts.length > 0
+            ? `Follow up - ${titleParts.join(' - ')}`
+            : `Follow up - Order #${order.id}`;
+    }
 }
 
 function cancelAddReminder() {
@@ -4989,25 +5081,42 @@ function cancelAddReminder() {
 
 // Quick add reminder for current order (from order details panel)
 function quickAddReminderForOrder() {
-    if (!currentOrder) {
+    const activeOrder = currentOrder || getSelectedOrder();
+    if (!activeOrder || !activeOrder.id) {
         alert('Please select an order first');
         return;
     }
     
     openRemindersModal();
     showAddReminderForm();
-    document.getElementById('reminder_order_id').value = currentOrder.id;
+    prefillReminderFormForOrder(activeOrder);
+
+    const saveBtn = document.getElementById('saveReminderBtn');
+    if (saveBtn) {
+        saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     document.getElementById('reminder_title').focus();
 }
 
 // Load and display reminders for current order
 async function loadOrderReminders() {
-    if (!currentOrder) {
+    const activeOrder = currentOrder || getSelectedOrder();
+    if (!activeOrder || !activeOrder.id) {
+        const container = document.getElementById('orderRemindersPanel');
+        if (container) {
+            container.innerHTML = `
+                <h3>
+                    ⏰ Reminders for this Order
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="quickAddReminderForOrder()" title="Add reminder for this order">+ Add</button>
+                </h3>
+                <p style="color: #999; font-style: italic;">Select an order to view reminders</p>
+            `;
+        }
         return;
     }
     
     try {
-        const response = await fetch(`${API_BASE}/reminders?order_id=${currentOrder.id}`);
+        const response = await fetch(`${API_BASE}/reminders?order_id=${activeOrder.id}`);
         const data = await response.json();
         
         if (data.success) {
@@ -5112,6 +5221,7 @@ async function saveNewReminder() {
             showToast('Reminder created successfully!');
             cancelAddReminder();
             loadReminders();
+            loadOrderReminders();
         } else {
             showError(result.error || 'Failed to create reminder');
         }
@@ -5251,6 +5361,7 @@ async function completeReminder(reminderId) {
         if (result.success) {
             showToast('Reminder completed!');
             loadReminders();
+            loadOrderReminders();
         } else {
             showError(result.error || 'Failed to complete reminder');
         }
@@ -5278,6 +5389,7 @@ async function snoozeReminder(reminderId) {
         if (result.success) {
             showToast(`Reminder snoozed for ${minutes} minutes`);
             loadReminders();
+            loadOrderReminders();
         } else {
             showError(result.error || 'Failed to snooze reminder');
         }
@@ -5300,6 +5412,7 @@ async function deleteReminder(reminderId) {
         if (result.success) {
             showToast('Reminder deleted');
             loadReminders();
+            loadOrderReminders();
         } else {
             showError(result.error || 'Failed to delete reminder');
         }
