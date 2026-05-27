@@ -4590,7 +4590,8 @@ function exportToCSV() {
 
 function downloadBackupJson() {
     const params = new URLSearchParams();
-    params.append('include_archived', showCompletedCheckbox.checked ? 'true' : 'false');
+    // Always include archived orders in backup exports so full datasets can be migrated.
+    params.append('include_archived', 'true');
 
     const url = `${API_BASE}/orders/backup-json?${params.toString()}`;
     window.open(url, '_blank');
@@ -4653,6 +4654,19 @@ async function restoreFromBackupFile(event) {
         const updated = orderSummary.updated || 0;
 
         showToast(`Backup restored. Orders inserted: ${inserted}, updated: ${updated}`);
+        // Make restored rows visible immediately even if they were archived/completed.
+        if (showCompletedCheckbox) {
+            showCompletedCheckbox.checked = true;
+        }
+        if (stageFilter) {
+            stageFilter.value = '';
+        }
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        if (ordersSearchInput) {
+            ordersSearchInput.value = '';
+        }
         await loadStages();
         await loadOrders();
     } catch (error) {
