@@ -349,6 +349,8 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # Return rows as dictionaries
     ensure_orders_schema(conn)
+    ensure_order_notes_schema(conn)
+    ensure_attachments_schema(conn)
     ensure_reminders_schema(conn)
     ensure_customer_profiles_schema(conn)
     ensure_item_style_options_schema(conn)
@@ -357,7 +359,85 @@ def get_db_connection():
 
 
 def ensure_orders_schema(conn):
-    """Ensure optional columns used by the web app exist."""
+    """Ensure the orders table exists and all optional columns used by the web app exist."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT,
+            customer_phone TEXT,
+            customer_email TEXT,
+            project_name TEXT,
+            quote_number TEXT,
+            quote_date TEXT,
+            quote_total REAL,
+            quote_number_2 TEXT,
+            quote_date_2 TEXT,
+            quote_total_2 REAL,
+            invoice_number TEXT,
+            invoice_date TEXT,
+            invoice_total REAL,
+            po_number TEXT,
+            po_numbers TEXT,
+            po_date_signed TEXT,
+            vendor TEXT,
+            product_type TEXT,
+            stage TEXT,
+            priority_manual INTEGER,
+            line_items TEXT,
+            additional_quotes TEXT,
+            vendor_ack_number TEXT,
+            vendor_ack_total REAL,
+            eta_date TEXT,
+            transfer_location TEXT,
+            transfer_done_at TEXT,
+            quote_done_at TEXT,
+            signoff_done_at TEXT,
+            invoice_done_at TEXT,
+            costsheet_done_at TEXT,
+            packet_done_at TEXT,
+            po_done_at TEXT,
+            order_placed_done_at TEXT,
+            ack_received_done_at TEXT,
+            eta_confirmed_done_at TEXT,
+            ship_ticket_done_at TEXT,
+            customer_arrival_notified_done_at TEXT,
+            will_call_done_at TEXT,
+            door_shop_will_call_done_at TEXT,
+            picked_up_done_at TEXT,
+            closed_done_at TEXT,
+            install_quote_done_at TEXT,
+            install_approved_done_at TEXT,
+            install_street TEXT,
+            install_city TEXT,
+            install_state TEXT,
+            install_zip TEXT,
+            delivery_street TEXT,
+            delivery_city TEXT,
+            delivery_state TEXT,
+            delivery_zip TEXT,
+            address_street TEXT,
+            address_city TEXT,
+            address_state TEXT,
+            address_zip TEXT,
+            customer_number TEXT,
+            has_customer_account INTEGER DEFAULT 0,
+            customer_profile_id INTEGER,
+            default_project_notes TEXT,
+            archived INTEGER DEFAULT 0,
+            is_pinned INTEGER DEFAULT 0,
+            is_flagged INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_stage ON orders(stage)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_customer_name ON orders(customer_name)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_po_number ON orders(po_number)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_po_numbers ON orders(po_numbers)")
+
     cursor = conn.execute("PRAGMA table_info(orders)")
     columns = {row[1] for row in cursor.fetchall()}
 
@@ -523,6 +603,41 @@ def ensure_orders_schema(conn):
            AND lower(trim(transfer_location)) = 'aptos'
         """
     )
+    conn.commit()
+
+
+def ensure_order_notes_schema(conn):
+    """Create the order notes table used by notes endpoints."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_order_notes_order_id ON order_notes(order_id)")
+    conn.commit()
+
+
+def ensure_attachments_schema(conn):
+    """Create the attachments table used by attachment endpoints."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            section TEXT,
+            filename TEXT NOT NULL,
+            rel_path TEXT NOT NULL,
+            added_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_order_id ON attachments(order_id)")
     conn.commit()
 
 
@@ -3365,6 +3480,8 @@ if __name__ == '__main__':
 
         conn = get_db_connection()
         ensure_orders_schema(conn)
+        ensure_order_notes_schema(conn)
+        ensure_attachments_schema(conn)
         ensure_reminders_schema(conn)
         ensure_customer_profiles_schema(conn)
         ensure_item_style_options_schema(conn)
