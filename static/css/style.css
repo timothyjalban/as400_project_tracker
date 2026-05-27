@@ -43,6 +43,14 @@
     --sticky-top-gap: 10px;
     --sticky-header-top: var(--sticky-top-gap);
     --sticky-filters-top: 108px;
+
+    /* Sunlight readability boost */
+    --sun-panel-bg: rgba(255, 255, 255, 0.08);
+    --sun-panel-border: rgba(255, 255, 255, 0.28);
+    --sun-field-bg: #3a3f46;
+    --sun-field-bg-focus: #444b54;
+    --sun-field-border: #8f99a6;
+    --sun-field-border-focus: #9ed1ff;
 }
 
 * {
@@ -57,6 +65,55 @@ body {
     background-color: var(--bg);
     color: var(--text-primary);
     line-height: 1.5;
+}
+
+/* Stronger contrast for bright environments (sun glare on screen). */
+.filter-group input[type="text"],
+.filter-group select,
+.orders-search-input,
+.form-group input,
+.form-group select,
+.form-group textarea,
+.line-item-field input,
+.line-item-field select,
+.line-item-field textarea,
+.stage-smart-field select,
+.stage-smart-field input,
+.stage-smart-field textarea {
+    background-color: var(--sun-field-bg);
+    border-color: var(--sun-field-border);
+    border-width: 2px;
+    color: #ffffff;
+}
+
+.filter-group input[type="text"]:focus,
+.filter-group select:focus,
+.orders-search-input:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus,
+.line-item-field input:focus,
+.line-item-field select:focus,
+.line-item-field textarea:focus,
+.stage-smart-field select:focus,
+.stage-smart-field input:focus,
+.stage-smart-field textarea:focus {
+    background-color: var(--sun-field-bg-focus);
+    border-color: var(--sun-field-border-focus);
+    box-shadow: 0 0 0 3px rgba(158, 209, 255, 0.24);
+}
+
+.items-editor-card,
+.line-item-card,
+.completed-orders-panel,
+.summary-card,
+.process-timeline-card,
+.process-editor-card,
+.process-stage-fields-card,
+.order-modal-content .form-section,
+#attachmentsSection {
+    background-color: var(--sun-panel-bg);
+    border-color: var(--sun-panel-border);
 }
 
 .container {
