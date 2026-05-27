@@ -13,12 +13,28 @@ echo.
 
 cd /d "%~dp0"
 
+if exist "C:\Projects\Order-Tracker\orders.db" (
+	set "ORDER_TRACKER_DB_PATH=C:\Projects\Order-Tracker\orders.db"
+) else (
+	set "ORDER_TRACKER_DB_PATH=C:\tmp\orders.db"
+)
+
+if exist "%~dp0.venv\Scripts\python.exe" (
+	set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
+) else (
+	set "PYTHON_EXE=python"
+)
+
+echo Using database: %ORDER_TRACKER_DB_PATH%
+echo Using Python: %PYTHON_EXE%
+echo.
+
 echo Starting Web App...
-start "Order Tracker Web App" cmd /k "python app.py"
+start "Order Tracker Web App" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && \"%PYTHON_EXE%\" app.py"
 timeout /t 2 /nobreak >nul
 
 echo Starting Desktop Helper...
-start "Order Tracker Desktop Helper" cmd /k "python desktop_helper_service.py"
+start "Order Tracker Desktop Helper" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && \"%PYTHON_EXE%\" desktop_helper_service.py"
 timeout /t 2 /nobreak >nul
 
 echo.
