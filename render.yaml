@@ -19,6 +19,8 @@ services:
         value: "/tmp/orders.db"
       - key: ORDER_TRACKER_ALLOW_INSECURE_DEFAULT_LOGIN
         value: "0"
+      - key: PIP_DISABLE_PIP_VERSION_CHECK
+        value: "1"
       # Set these manually in the Render dashboard (never commit secrets):
       # - key: ORDER_TRACKER_ADMIN_USERNAME
       # - key: ORDER_TRACKER_ADMIN_PASSWORD_HASH
