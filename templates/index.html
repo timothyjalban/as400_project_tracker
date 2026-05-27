@@ -14,8 +14,13 @@
                 <h1>Order Tracker</h1>
                 <div class="header-subtitle">Web Version - Phase 10+</div>
             </div>
-            <div id="helperStatus" class="helper-status" title="Desktop Helper Service Status">
-                <span id="helperStatusText">Checking automation...</span>
+            <div class="header-actions">
+                <div id="helperStatus" class="helper-status" title="Desktop Helper Service Status">
+                    <span id="helperStatusText">Checking automation...</span>
+                </div>
+                <form method="post" action="/logout">
+                    <button type="submit" class="btn-logout">Sign Out</button>
+                </form>
             </div>
         </header>
 

@@ -136,6 +136,42 @@ python scripts/smoke_customer_profile_endpoints.py --base-url http://127.0.0.1:5
 - Try enabling "Show Completed" checkbox
 - Check browser console for errors (F12)
 
+## 🔒 Security Configuration (Production)
+
+The app now requires authentication by default.
+
+Set these environment variables before publishing:
+
+- `ORDER_TRACKER_SECRET_KEY`: long random secret for Flask sessions.
+- `ORDER_TRACKER_AUTH_USERS_JSON`: JSON array of users with password hashes.
+- `ORDER_TRACKER_ENFORCE_HTTPS=1`: force HTTPS redirects + HSTS.
+- `ORDER_TRACKER_COOKIE_SECURE=1`: only send cookies over HTTPS.
+- `ORDER_TRACKER_SESSION_HOURS=12`: session lifetime (hours).
+- `ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY=1`: keep desktop helper APIs local-only.
+
+Optional single-admin fallback (dev/testing only):
+
+- `ORDER_TRACKER_ADMIN_USERNAME`
+- `ORDER_TRACKER_ADMIN_PASSWORD` or `ORDER_TRACKER_ADMIN_PASSWORD_HASH`
+- `ORDER_TRACKER_ALLOW_INSECURE_DEFAULT_LOGIN=1` (default): allows `admin/changeme` if no auth vars are set.
+
+Example `ORDER_TRACKER_AUTH_USERS_JSON`:
+
+```json
+[
+  {
+    "username": "admin",
+    "password_hash": "pbkdf2:sha256:600000$...",
+    "role": "admin"
+  }
+]
+```
+
+Notes:
+
+- All API/page routes require login except `/login` and static files.
+- Desktop helper routes also require admin role and (by default) local requests.
+
 ## 💡 Tips
 
 - The app connects to your **existing** SQLite database

@@ -37,7 +37,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-FIXED_LOCATION = 'Felton'
 TRACE_ENV_VAR = 'OT_AUTOMATION_TRACE'
 
 
@@ -99,7 +98,7 @@ def launch_quote():
         size = (data.get('size') or '').strip()
         jamb = (data.get('jamb') or '').strip()
         color = (data.get('color') or '').strip()
-        location = FIXED_LOCATION
+        location = 'Felton'
         customer_number = (data.get('customer_number') or '').strip()
         has_account = data.get('has_customer_account', False)
         line_items = data.get('line_items', [])
@@ -201,7 +200,7 @@ def launch_invoice():
         size = (data.get('size') or '').strip()
         jamb = (data.get('jamb') or '').strip()
         color = (data.get('color') or '').strip()
-        location = FIXED_LOCATION
+        location = 'Felton'
         
         logger.info(f"Launching invoice for customer: {customer}, phone: {phone}")
         _trace(
@@ -270,7 +269,7 @@ def launch_special_order():
         
         job_name = (data.get('project_name') or '').strip()
         quote_or_invoice_number = (data.get('quote_number') or data.get('invoice_number') or '').strip()
-        location = FIXED_LOCATION
+        location = 'Felton'
 
         if not quote_or_invoice_number:
             return jsonify({
@@ -332,7 +331,7 @@ def open_quote():
             }), 400
 
         logger.info(f"Opening quote with number: {quote_number}")
-        _trace('open-quote', quote_number=quote_number, location=FIXED_LOCATION)
+        _trace('open-quote', quote_number=quote_number, location='Felton')
 
         # Call the desktop app's launch function for opening a quote
         launch_ibm_with_details(
@@ -344,7 +343,7 @@ def open_quote():
             jamb='',
             color='',
             script="open_quote",
-            location=FIXED_LOCATION
+            location='Felton'
         )
 
         return jsonify({
@@ -374,7 +373,7 @@ def open_invoice():
             }), 400
 
         logger.info(f"Opening invoice with number: {invoice_number}")
-        _trace('open-invoice', invoice_number=invoice_number, location=FIXED_LOCATION)
+        _trace('open-invoice', invoice_number=invoice_number, location='Felton')
 
         # Call the desktop app's launch function for opening an invoice
         launch_ibm_with_details(
@@ -386,7 +385,7 @@ def open_invoice():
             jamb='',
             color='',
             script="open_charge_sale",
-            location=FIXED_LOCATION
+            location='Felton'
         )
 
         return jsonify({
@@ -416,7 +415,7 @@ def open_special_order():
             }), 400
 
         logger.info(f"Opening special order with number: {order_number}")
-        _trace('open-special-order', order_number=order_number, location=FIXED_LOCATION)
+        _trace('open-special-order', order_number=order_number, location='Felton')
 
         # Call the desktop app's launch function for opening a special order
         launch_ibm_with_details(
@@ -428,7 +427,7 @@ def open_special_order():
             jamb='',
             color='',
             script="open_special_order",
-            location=FIXED_LOCATION
+            location='Felton'
         )
 
         return jsonify({
