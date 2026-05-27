@@ -325,6 +325,18 @@ body.high-contrast .stage-smart-field textarea:focus {
     box-shadow: 0 0 0 3px rgba(255, 224, 130, 0.3) !important;
 }
 
+body.high-contrast .item-add-style-button {
+    background: #001c24 !important;
+    border-color: #7fe8ff !important;
+    color: #d5f8ff !important;
+}
+
+body.high-contrast .item-add-style-button:hover {
+    background: #00323d !important;
+    border-color: #b6f2ff !important;
+    color: #ffffff !important;
+}
+
 /* Filters Bar */
 .filters-bar {
     display: flex;
@@ -1038,13 +1050,22 @@ body.high-contrast .stage-smart-field textarea:focus {
     background-color: rgba(33, 150, 243, 0.12);
     color: #bbdefb;
     cursor: pointer;
-    font-size: var(--font-size-xs);
-    padding: 4px 8px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.25;
+    padding: 6px 10px;
+    min-height: 30px;
+    white-space: normal;
+    text-align: left;
 }
 
 .item-add-style-button:hover {
     border-color: rgba(33, 150, 243, 0.75);
     background-color: rgba(33, 150, 243, 0.2);
+}
+
+.line-item-field .item-add-style-button {
+    margin-top: 2px;
 }
 
 .line-item-field input,
@@ -1063,6 +1084,11 @@ body.high-contrast .stage-smart-field textarea:focus {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 10px;
+    align-items: start;
+}
+
+.line-item-options .line-item-field {
+    min-width: 0;
 }
 
 .item-option-buttons {
@@ -3133,6 +3159,11 @@ body.high-contrast .stage-smart-field textarea:focus {
     .line-item-grid,
     .line-item-options {
         grid-template-columns: 1fr;
+    }
+
+    .line-item-field .item-add-style-button {
+        width: 100%;
+        text-align: center;
     }
     
     .modal-content {
