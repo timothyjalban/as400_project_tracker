@@ -3360,11 +3360,18 @@ def ocr_process_pdf():
 
 
 if __name__ == '__main__':
-    # Check if database exists
+    # First-run bootstrap: create parent folder/db file and initialize schema if needed.
     if not DB_PATH.exists():
-        print(f"ERROR: Database not found at {DB_PATH}")
-        print("Please update DB_PATH in app.py to point to your orders.db file")
-        exit(1)
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Database not found at {DB_PATH}; creating a new database...")
+
+        conn = get_db_connection()
+        ensure_orders_schema(conn)
+        ensure_customer_profiles_schema(conn)
+        ensure_item_style_options_schema(conn)
+        ensure_item_vendor_options_schema(conn)
+        conn.close()
+        print("Database initialized successfully.")
     
     print(f"Connected to database: {DB_PATH}")
     print("Starting Flask server...")
