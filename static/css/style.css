@@ -871,6 +871,36 @@ body.high-contrast .stage-smart-field textarea:focus {
     font-size: var(--font-size-sm);
 }
 
+.items-editor-header-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.items-collapse-btn {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    padding: 5px 10px;
+}
+
+.items-collapse-btn:hover {
+    border-color: var(--primary);
+    background: rgba(33, 150, 243, 0.18);
+}
+
+.items-editor-card.collapsed .items-editor-body {
+    display: none;
+}
+
+.items-editor-card.collapsed {
+    padding-bottom: 10px;
+}
+
 .items-type-actions {
     display: flex;
     gap: 8px;

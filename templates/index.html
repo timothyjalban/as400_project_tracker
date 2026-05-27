@@ -181,12 +181,17 @@
                         <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
                     </div>
 
-                    <div class="items-editor-card">
+                    <div id="orderItemsContainerCard" class="items-editor-card">
                         <div class="process-editor-header">
                             <h3>Order Items</h3>
-                            <span class="items-editor-subtitle">Start with Door or Window, then add details</span>
+                            <div class="items-editor-header-right">
+                                <span class="items-editor-subtitle">Start with Door or Window, then add details</span>
+                                <button type="button" id="toggleItemsContainerBtn" class="items-collapse-btn" aria-expanded="true">Collapse</button>
+                            </div>
                         </div>
-                        <div id="lineItemsList" class="line-items-list"></div>
+                        <div id="orderItemsContainerBody" class="items-editor-body">
+                            <div id="lineItemsList" class="line-items-list"></div>
+                        </div>
                     </div>
 
                     <div class="process-timeline-card">

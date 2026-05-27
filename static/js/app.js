@@ -83,6 +83,8 @@ const floatingStageJumpTrack = document.getElementById('floatingStageJumpTrack')
 const addDoorItemBtn = document.getElementById('addDoorItemBtn');
 const addWindowItemBtn = document.getElementById('addWindowItemBtn');
 const lineItemsList = document.getElementById('lineItemsList');
+const orderItemsContainerCard = document.getElementById('orderItemsContainerCard');
+const toggleItemsContainerBtn = document.getElementById('toggleItemsContainerBtn');
 const confirmDialogModal = document.getElementById('confirmDialogModal');
 const confirmDialogTitle = document.getElementById('confirmDialogTitle');
 const confirmDialogMessage = document.getElementById('confirmDialogMessage');
@@ -115,6 +117,29 @@ let itemVendorOptions = {
 let vendorSkuByName = {};
 let windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
 const HIGH_CONTRAST_STORAGE_KEY = 'order_tracker_high_contrast_enabled';
+const ORDER_ITEMS_COLLAPSED_STORAGE_KEY = 'order_tracker_items_container_collapsed';
+
+function setOrderItemsContainerCollapsed(collapsed) {
+    if (!orderItemsContainerCard || !toggleItemsContainerBtn) return;
+
+    const isCollapsed = Boolean(collapsed);
+    orderItemsContainerCard.classList.toggle('collapsed', isCollapsed);
+    toggleItemsContainerBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    toggleItemsContainerBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+}
+
+function initializeOrderItemsContainerCollapse() {
+    const saved = window.localStorage.getItem(ORDER_ITEMS_COLLAPSED_STORAGE_KEY);
+    setOrderItemsContainerCollapsed(saved === 'true');
+
+    if (toggleItemsContainerBtn) {
+        toggleItemsContainerBtn.addEventListener('click', () => {
+            const nextState = !orderItemsContainerCard.classList.contains('collapsed');
+            setOrderItemsContainerCollapsed(nextState);
+            window.localStorage.setItem(ORDER_ITEMS_COLLAPSED_STORAGE_KEY, nextState ? 'true' : 'false');
+        });
+    }
+}
 
 function setHighContrastMode(enabled) {
     const isEnabled = Boolean(enabled);
@@ -380,6 +405,7 @@ function syncPriorityInputWithStage(stageElement, priorityElement, previousStage
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     initializeHighContrastToggle();
+    initializeOrderItemsContainerCollapse();
 
     // Load stages for filter dropdown
     loadStages();
