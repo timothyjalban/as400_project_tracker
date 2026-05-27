@@ -84,6 +84,26 @@ ENFORCE_HTTPS = (os.environ.get('ORDER_TRACKER_ENFORCE_HTTPS', '0') or '0').stri
 DESKTOP_HELPER_LOCAL_ONLY = (os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY', '1') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
+def resolve_db_path(preferred_path):
+    """Return a writable DB path, falling back to /tmp when needed."""
+    import tempfile
+
+    candidate = Path(preferred_path) if preferred_path else Path(tempfile.gettempdir()) / 'orders.db'
+    fallback = Path(tempfile.gettempdir()) / 'orders.db'
+
+    try:
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        probe_path = candidate.parent / '.db_write_probe'
+        probe_path.write_text('', encoding='utf-8')
+        probe_path.unlink(missing_ok=True)
+        return candidate
+    except Exception:
+        if candidate != fallback:
+            print(f"WARNING: DB path {candidate} is not writable; falling back to {fallback}")
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 def _load_auth_users() -> Dict[str, Dict[str, str]]:
     """Load users from env JSON with fallback single-admin credentials."""
     users: Dict[str, Dict[str, str]] = {}
@@ -219,7 +239,7 @@ def security_after_request(response):
     return response
 
 # Path to the SQLite database. Override via ORDER_TRACKER_DB_PATH env var for production.
-DB_PATH = Path(os.environ.get('ORDER_TRACKER_DB_PATH', db_config.DB_PATH))
+DB_PATH = resolve_db_path(os.environ.get('ORDER_TRACKER_DB_PATH', db_config.DB_PATH))
 db_config.DB_PATH = DB_PATH
 DESKTOP_HELPER_BASE_URL = os.environ.get('DESKTOP_HELPER_BASE_URL', 'http://127.0.0.1:5001/api').rstrip('/')
 
@@ -3475,7 +3495,6 @@ def ocr_process_pdf():
 if __name__ == '__main__':
     # First-run bootstrap: create parent folder/db file and initialize schema if needed.
     if not DB_PATH.exists():
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         print(f"Database not found at {DB_PATH}; creating a new database...")
 
         conn = get_db_connection()
