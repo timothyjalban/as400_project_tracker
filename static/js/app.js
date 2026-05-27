@@ -59,6 +59,7 @@ const backupAllBtn = document.getElementById('backupAllBtn');
 const downloadBackupBtn = document.getElementById('downloadBackupBtn');
 const restoreBackupBtn = document.getElementById('restoreBackupBtn');
 const restoreBackupInput = document.getElementById('restoreBackupInput');
+const highContrastToggleBtn = document.getElementById('highContrastToggleBtn');
 const processEmpty = document.getElementById('processEmpty');
 const processContent = document.getElementById('processContent');
 const processOrderTitle = document.getElementById('processOrderTitle');
@@ -113,6 +114,32 @@ let itemVendorOptions = {
 };
 let vendorSkuByName = {};
 let windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
+const HIGH_CONTRAST_STORAGE_KEY = 'order_tracker_high_contrast_enabled';
+
+function setHighContrastMode(enabled) {
+    const isEnabled = Boolean(enabled);
+    document.body.classList.toggle('high-contrast', isEnabled);
+    if (highContrastToggleBtn) {
+        highContrastToggleBtn.textContent = isEnabled ? 'High Contrast: On' : 'High Contrast: Off';
+        highContrastToggleBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+        highContrastToggleBtn.classList.toggle('active', isEnabled);
+    }
+}
+
+function initializeHighContrastToggle() {
+    const saved = window.localStorage.getItem(HIGH_CONTRAST_STORAGE_KEY);
+    const enabled = saved === 'true';
+    setHighContrastMode(enabled);
+
+    if (highContrastToggleBtn) {
+        highContrastToggleBtn.addEventListener('click', () => {
+            const nextEnabled = !document.body.classList.contains('high-contrast');
+            setHighContrastMode(nextEnabled);
+            window.localStorage.setItem(HIGH_CONTRAST_STORAGE_KEY, nextEnabled ? 'true' : 'false');
+            showToast(nextEnabled ? 'High contrast enabled' : 'High contrast disabled');
+        });
+    }
+}
 
 function loadWindowHandingOptions() {
     try {
@@ -352,6 +379,8 @@ function syncPriorityInputWithStage(stageElement, priorityElement, previousStage
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+    initializeHighContrastToggle();
+
     // Load stages for filter dropdown
     loadStages();
 
