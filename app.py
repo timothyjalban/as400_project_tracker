@@ -339,6 +339,19 @@ FIN_TYPE_DEFAULTS = [
     '1" Setback',
 ]
 
+FIN_TYPE_ALIASES = {
+    '1': '1" Setback',
+    '1 setback': '1" Setback',
+}
+
+
+def normalize_fin_type_name(value: Any) -> str:
+    """Normalize fin type text and map legacy aliases to canonical labels."""
+    clean = str(value or '').strip()
+    if not clean:
+        return ''
+    return FIN_TYPE_ALIASES.get(clean.lower(), clean)
+
 
 def get_vendor_catalog() -> List[Dict[str, Any]]:
     """Return normalized vendor catalog with SKU values from desktop project data."""
@@ -942,10 +955,39 @@ def ensure_fin_type_options_schema(conn):
         """
     )
 
+    # Migrate legacy/partial values (e.g., "1") to canonical labels.
+    rows = conn.execute(
+        "SELECT id, fin_type_name FROM fin_type_options"
+    ).fetchall()
+
+    for row in rows:
+        option_id = row['id']
+        original_name = row['fin_type_name']
+        normalized_name = normalize_fin_type_name(original_name)
+
+        if not normalized_name:
+            conn.execute("DELETE FROM fin_type_options WHERE id = ?", (option_id,))
+            continue
+
+        if normalized_name == original_name:
+            continue
+
+        try:
+            conn.execute(
+                "UPDATE fin_type_options SET fin_type_name = ? WHERE id = ?",
+                (normalized_name, option_id),
+            )
+        except sqlite3.IntegrityError:
+            # Duplicate after normalization; keep one canonical row.
+            conn.execute("DELETE FROM fin_type_options WHERE id = ?", (option_id,))
+
     for fin_type_name in FIN_TYPE_DEFAULTS:
+        normalized_name = normalize_fin_type_name(fin_type_name)
+        if not normalized_name:
+            continue
         conn.execute(
             "INSERT OR IGNORE INTO fin_type_options (fin_type_name) VALUES (?)",
-            (fin_type_name,),
+            (normalized_name,),
         )
 
     conn.commit()
@@ -1684,7 +1726,7 @@ def create_fin_type_option_api():
     """Create a global fin type option."""
     try:
         data = request.get_json() or {}
-        fin_type_name = str(data.get('fin_type_name', '')).strip()
+        fin_type_name = normalize_fin_type_name(data.get('fin_type_name', ''))
 
         if not fin_type_name:
             return jsonify({

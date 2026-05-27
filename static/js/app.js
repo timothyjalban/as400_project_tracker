@@ -107,6 +107,10 @@ const DEFAULT_ITEM_VENDOR_OPTIONS = {
     window: ['Milgard', 'Andersen', 'Pella']
 };
 const DEFAULT_FIN_TYPE_OPTIONS = ['1" Setback'];
+const FIN_TYPE_ALIASES = {
+    '1': '1" Setback',
+    '1 setback': '1" Setback'
+};
 let itemStyleOptions = {
     door: [...DEFAULT_ITEM_STYLE_OPTIONS.door],
     window: [...DEFAULT_ITEM_STYLE_OPTIONS.window]
@@ -654,6 +658,12 @@ function createLineItemTemplate(type) {
     };
 }
 
+function normalizeFinTypeValue(value) {
+    const clean = String(value || '').trim();
+    if (!clean) return '';
+    return FIN_TYPE_ALIASES[clean.toLowerCase()] || clean;
+}
+
 function normalizeLineItem(rawItem) {
     const item = { ...createLineItemTemplate('door'), ...(rawItem || {}) };
     const detectedType = String(item.type || item.product || '').toLowerCase().includes('window') ? 'window' : 'door';
@@ -672,6 +682,7 @@ function normalizeLineItem(rawItem) {
     if (!item.argon_included && rawItem?.argon !== undefined && rawItem?.argon !== null) {
         item.argon_included = String(rawItem.argon).trim();
     }
+    item.fin_type = normalizeFinTypeValue(item.fin_type);
     item.ui_collapsed = Boolean(rawItem?.ui_collapsed ?? rawItem?.collapsed ?? false);
     return item;
 }
@@ -708,11 +719,12 @@ function addLineItem(type) {
 
 function updateLineItem(index, field, value) {
     if (!currentLineItems[index]) return;
-    currentLineItems[index][field] = value;
+    const normalizedValue = field === 'fin_type' ? normalizeFinTypeValue(value) : value;
+    currentLineItems[index][field] = normalizedValue;
     if (field === 'type') {
-        currentLineItems[index].product = value === 'window' ? 'Window' : 'Door';
+        currentLineItems[index].product = normalizedValue === 'window' ? 'Window' : 'Door';
     } else if (field === 'vendor') {
-        currentLineItems[index].vendor_sku = getVendorSkuForName(value) || '';
+        currentLineItems[index].vendor_sku = getVendorSkuForName(normalizedValue) || '';
     }
     syncLineItemsToHiddenField();
 }
@@ -927,7 +939,7 @@ function getFinTypeOptions() {
     const options = Array.isArray(finTypeOptions) && finTypeOptions.length > 0
         ? finTypeOptions
         : DEFAULT_FIN_TYPE_OPTIONS;
-    return Array.from(new Set(options.map(name => String(name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set(options.map(name => normalizeFinTypeValue(name)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeVendorKey(name) {
@@ -1032,7 +1044,7 @@ async function loadFinTypeOptions() {
         if (!data.success) return;
 
         finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
-            ? data.fin_types
+            ? data.fin_types.map(name => normalizeFinTypeValue(name)).filter(Boolean)
             : [...DEFAULT_FIN_TYPE_OPTIONS];
 
         if (currentLineItems.length > 0) {
@@ -1180,11 +1192,13 @@ async function addFinTypeOption() {
         return;
     }
 
+    const normalizedFinTypeName = normalizeFinTypeValue(trimmedFinTypeName);
+
     try {
         const response = await fetch(`${API_BASE}/fin-type-options`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fin_type_name: trimmedFinTypeName })
+            body: JSON.stringify({ fin_type_name: normalizedFinTypeName })
         });
         const data = await response.json();
 
@@ -1194,10 +1208,10 @@ async function addFinTypeOption() {
         }
 
         finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
-            ? data.fin_types
+            ? data.fin_types.map(name => normalizeFinTypeValue(name)).filter(Boolean)
             : [...DEFAULT_FIN_TYPE_OPTIONS];
         renderLineItemsEditor();
-        showToast(`${trimmedFinTypeName} added to fin types`);
+        showToast(`${normalizedFinTypeName} added to fin types`);
     } catch (error) {
         console.error('Error saving fin type option:', error);
         showError('Failed to save fin type option');
