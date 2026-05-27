@@ -16,13 +16,9 @@ services:
       - key: ORDER_TRACKER_SECRET_KEY
         generateValue: true
       - key: ORDER_TRACKER_DB_PATH
-        value: "/data/orders.db"
+        value: "/tmp/orders.db"
       - key: ORDER_TRACKER_ALLOW_INSECURE_DEFAULT_LOGIN
         value: "0"
       # Set these manually in the Render dashboard (never commit secrets):
       # - key: ORDER_TRACKER_ADMIN_USERNAME
       # - key: ORDER_TRACKER_ADMIN_PASSWORD_HASH
-    disk:
-      name: order-tracker-data
-      mountPath: /data
-      sizeGB: 1

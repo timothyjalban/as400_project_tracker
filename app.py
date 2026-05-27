@@ -17,15 +17,11 @@ import logging
 from datetime import timedelta
 from werkzeug.security import check_password_hash
 
-# Add Order-Tracker directory to path to import database functions
-sys.path.insert(0, str(Path(r"C:\Projects\Order-Tracker")))
-
-# Import and update DB config BEFORE importing database functions
+# Use the local in-repo data package so the app can run outside the desktop environment.
 import data.config as db_config
-db_config.DB_PATH = Path(r"C:\Projects\Order-Tracker\orders.db")
 
 # Now import database functions with correct DB_PATH
-from data.database import backup_order, insert_reminder, list_due_reminders, snooze_reminder, complete_reminder
+from data.database import ensure_reminders_schema, backup_order, insert_reminder, list_due_reminders, snooze_reminder, complete_reminder
 import tempfile
 import os
 import urllib.request
@@ -223,7 +219,8 @@ def security_after_request(response):
     return response
 
 # Path to the SQLite database. Override via ORDER_TRACKER_DB_PATH env var for production.
-DB_PATH = Path(os.environ.get('ORDER_TRACKER_DB_PATH', r"C:\Projects\Order-Tracker\orders.db"))
+DB_PATH = Path(os.environ.get('ORDER_TRACKER_DB_PATH', db_config.DB_PATH))
+db_config.DB_PATH = DB_PATH
 DESKTOP_HELPER_BASE_URL = os.environ.get('DESKTOP_HELPER_BASE_URL', 'http://127.0.0.1:5001/api').rstrip('/')
 
 
@@ -352,6 +349,7 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # Return rows as dictionaries
     ensure_orders_schema(conn)
+    ensure_reminders_schema(conn)
     ensure_customer_profiles_schema(conn)
     ensure_item_style_options_schema(conn)
     ensure_item_vendor_options_schema(conn)
@@ -3367,6 +3365,7 @@ if __name__ == '__main__':
 
         conn = get_db_connection()
         ensure_orders_schema(conn)
+        ensure_reminders_schema(conn)
         ensure_customer_profiles_schema(conn)
         ensure_item_style_options_schema(conn)
         ensure_item_vendor_options_schema(conn)

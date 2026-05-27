@@ -149,6 +149,14 @@ Set these environment variables before publishing:
 - `ORDER_TRACKER_SESSION_HOURS=12`: session lifetime (hours).
 - `ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY=1`: keep desktop helper APIs local-only.
 
+## 🆓 Zero-Cost Render Option
+
+If you do not want to pay for a Render disk, you can deploy with the included `render.yaml` using ephemeral storage.
+
+- SQLite will use `/tmp/orders.db`.
+- The app will run for free on Render, but the database will reset if the service restarts or redeploys.
+- If you need permanent online data, you will need either a paid persistent disk or a free external database service.
+
 Optional single-admin fallback (dev/testing only):
 
 - `ORDER_TRACKER_ADMIN_USERNAME`
