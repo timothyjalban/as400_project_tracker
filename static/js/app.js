@@ -56,6 +56,9 @@ const customerLookupBtn = document.getElementById('customerLookupBtn');
 const exportBtn = document.getElementById('exportBtn');
 const exportBlankProcessBtn = document.getElementById('exportBlankProcessBtn');
 const backupAllBtn = document.getElementById('backupAllBtn');
+const downloadBackupBtn = document.getElementById('downloadBackupBtn');
+const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+const restoreBackupInput = document.getElementById('restoreBackupInput');
 const processEmpty = document.getElementById('processEmpty');
 const processContent = document.getElementById('processContent');
 const processOrderTitle = document.getElementById('processOrderTitle');
@@ -431,6 +434,24 @@ document.addEventListener('DOMContentLoaded', () => {
     backupAllBtn.addEventListener('click', () => {
         backupAllOrders();
     });
+
+    if (downloadBackupBtn) {
+        downloadBackupBtn.addEventListener('click', () => {
+            downloadBackupJson();
+        });
+    }
+
+    if (restoreBackupBtn) {
+        restoreBackupBtn.addEventListener('click', () => {
+            openRestoreBackupPicker();
+        });
+    }
+
+    if (restoreBackupInput) {
+        restoreBackupInput.addEventListener('change', (event) => {
+            restoreFromBackupFile(event);
+        });
+    }
 
     if (saveInlineOrderBtn) {
         saveInlineOrderBtn.addEventListener('click', saveInlineOrder);
@@ -4565,6 +4586,87 @@ function exportToCSV() {
     window.open(url, '_blank');
     
     showToast('Exporting orders to CSV...');
+}
+
+function downloadBackupJson() {
+    const params = new URLSearchParams();
+    params.append('include_archived', showCompletedCheckbox.checked ? 'true' : 'false');
+
+    const url = `${API_BASE}/orders/backup-json?${params.toString()}`;
+    window.open(url, '_blank');
+    showToast('Preparing JSON backup download...');
+}
+
+function openRestoreBackupPicker() {
+    if (!restoreBackupInput) {
+        showError('Backup restore input is not available');
+        return;
+    }
+
+    restoreBackupInput.value = '';
+    restoreBackupInput.click();
+}
+
+async function restoreFromBackupFile(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+        showError('Please select a JSON backup file');
+        return;
+    }
+
+    const confirmed = confirm(
+        `Restore backup file ${file.name}?\n\n` +
+        'This will merge backup data into the current database and may update existing records.'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    if (restoreBackupBtn) {
+        restoreBackupBtn.disabled = true;
+        restoreBackupBtn.textContent = 'Restoring...';
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE}/orders/restore-json`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            showError(result.error || 'Failed to restore backup');
+            return;
+        }
+
+        const summary = result.summary || {};
+        const orderSummary = summary.orders || {};
+        const inserted = orderSummary.inserted || 0;
+        const updated = orderSummary.updated || 0;
+
+        showToast(`Backup restored. Orders inserted: ${inserted}, updated: ${updated}`);
+        await loadStages();
+        await loadOrders();
+    } catch (error) {
+        console.error('Error restoring backup:', error);
+        showError('Failed to restore backup');
+    } finally {
+        if (restoreBackupBtn) {
+            restoreBackupBtn.disabled = false;
+            restoreBackupBtn.textContent = 'Restore Backup JSON';
+        }
+        if (restoreBackupInput) {
+            restoreBackupInput.value = '';
+        }
+    }
 }
 
 function buildBlankSalesProcessPrintHtml() {

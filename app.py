@@ -916,6 +916,117 @@ def dict_from_row(row):
     """Convert sqlite3.Row to dict"""
     return dict(zip(row.keys(), row))
 
+
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _quote_identifier(identifier: str) -> str:
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', identifier or ''):
+        raise ValueError(f'Invalid SQL identifier: {identifier}')
+    return f'"{identifier}"'
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+        (table_name,)
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn, table_name: str) -> List[str]:
+    table_sql = _quote_identifier(table_name)
+    rows = conn.execute(f"PRAGMA table_info({table_sql})").fetchall()
+    columns: List[str] = []
+    for row in rows:
+        try:
+            columns.append(row['name'])
+        except Exception:
+            columns.append(row[1])
+    return columns
+
+
+def _upsert_table_rows(conn, table_name: str, rows: Any) -> Dict[str, int]:
+    stats = {'inserted': 0, 'updated': 0, 'skipped': 0}
+
+    if not isinstance(rows, list) or not rows:
+        return stats
+
+    if not _table_exists(conn, table_name):
+        stats['skipped'] = len(rows)
+        return stats
+
+    columns = _table_columns(conn, table_name)
+    if not columns:
+        stats['skipped'] = len(rows)
+        return stats
+
+    id_column = 'id' if 'id' in columns else None
+    writable_columns = [col for col in columns if col != id_column]
+
+    table_sql = _quote_identifier(table_name)
+
+    for entry in rows:
+        if not isinstance(entry, dict):
+            stats['skipped'] += 1
+            continue
+
+        requested_id = None
+        if id_column:
+            raw_id = entry.get(id_column)
+            if raw_id not in (None, ''):
+                try:
+                    requested_id = int(raw_id)
+                except (TypeError, ValueError):
+                    requested_id = None
+
+        row_values = {
+            col: entry.get(col)
+            for col in writable_columns
+            if col in entry
+        }
+
+        if requested_id is not None and id_column:
+            id_sql = _quote_identifier(id_column)
+            existing = conn.execute(
+                f"SELECT 1 FROM {table_sql} WHERE {id_sql} = ? LIMIT 1",
+                (requested_id,)
+            ).fetchone()
+
+            if existing:
+                if row_values:
+                    set_clause = ', '.join(f"{_quote_identifier(col)} = ?" for col in row_values.keys())
+                    conn.execute(
+                        f"UPDATE {table_sql} SET {set_clause} WHERE {id_sql} = ?",
+                        [*row_values.values(), requested_id]
+                    )
+                stats['updated'] += 1
+                continue
+
+        insert_columns = list(row_values.keys())
+        insert_values = list(row_values.values())
+
+        if id_column and requested_id is not None:
+            insert_columns = [id_column, *insert_columns]
+            insert_values = [requested_id, *insert_values]
+
+        if not insert_columns:
+            stats['skipped'] += 1
+            continue
+
+        cols_sql = ', '.join(_quote_identifier(col) for col in insert_columns)
+        placeholders = ', '.join('?' for _ in insert_columns)
+        conn.execute(
+            f"INSERT INTO {table_sql} ({cols_sql}) VALUES ({placeholders})",
+            insert_values
+        )
+        stats['inserted'] += 1
+
+    return stats
+
 @app.route('/')
 def index():
     """Serve the main HTML page"""
@@ -1600,6 +1711,123 @@ def export_orders():
             headers={'Content-Disposition': f'attachment; filename={filename}'}
         )
     
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/orders/backup-json', methods=['GET'])
+def backup_orders_json_download():
+    """Download a full JSON backup suitable for cloud restore."""
+    include_archived = _coerce_bool(request.args.get('include_archived', 'true'), default=True)
+
+    try:
+        conn = get_db_connection()
+
+        orders_query = "SELECT * FROM orders"
+        params: List[Any] = []
+        if not include_archived:
+            orders_query += " WHERE (archived IS NULL OR archived = 0)"
+        orders_query += " ORDER BY id"
+
+        orders = [dict_from_row(row) for row in conn.execute(orders_query, params).fetchall()]
+
+        payload: Dict[str, Any] = {
+            'version': 1,
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'include_archived': include_archived,
+            'orders': orders,
+        }
+
+        if _table_exists(conn, 'order_notes'):
+            payload['order_notes'] = [
+                dict_from_row(row)
+                for row in conn.execute("SELECT * FROM order_notes ORDER BY id").fetchall()
+            ]
+
+        if _table_exists(conn, 'reminders'):
+            payload['reminders'] = [
+                dict_from_row(row)
+                for row in conn.execute("SELECT * FROM reminders ORDER BY id").fetchall()
+            ]
+
+        if _table_exists(conn, 'attachments'):
+            payload['attachments'] = [
+                dict_from_row(row)
+                for row in conn.execute("SELECT * FROM attachments ORDER BY id").fetchall()
+            ]
+
+        conn.close()
+
+        stream = io.BytesIO(json.dumps(payload, indent=2, default=str).encode('utf-8'))
+        stream.seek(0)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name=f'order_tracker_backup_{timestamp}.json',
+            mimetype='application/json'
+        )
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/orders/restore-json', methods=['POST'])
+def restore_orders_json():
+    """Restore orders and related metadata from a JSON backup file."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        if not file or not file.filename:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        payload = json.loads(file.read())
+        if not isinstance(payload, dict):
+            return jsonify({'success': False, 'error': 'Invalid backup format'}), 400
+
+        if not isinstance(payload.get('orders'), list):
+            return jsonify({'success': False, 'error': 'Backup is missing orders list'}), 400
+
+        conn = get_db_connection()
+        try:
+            conn.execute('BEGIN')
+
+            orders_stats = _upsert_table_rows(conn, 'orders', payload.get('orders'))
+            notes_stats = _upsert_table_rows(conn, 'order_notes', payload.get('order_notes'))
+            reminders_stats = _upsert_table_rows(conn, 'reminders', payload.get('reminders'))
+            attachments_stats = _upsert_table_rows(conn, 'attachments', payload.get('attachments'))
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        summary = {
+            'orders': orders_stats,
+            'order_notes': notes_stats,
+            'reminders': reminders_stats,
+            'attachments': attachments_stats,
+        }
+
+        return jsonify({
+            'success': True,
+            'message': 'Backup restored successfully',
+            'summary': summary
+        })
+
+    except json.JSONDecodeError:
+        return jsonify({'success': False, 'error': 'Invalid JSON file'}), 400
     except Exception as e:
         return jsonify({
             'success': False,
