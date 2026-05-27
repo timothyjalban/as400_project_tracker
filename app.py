@@ -925,6 +925,8 @@ def dict_from_row(row):
 @app.route('/')
 def index():
     """Serve the main HTML page"""
+    if not _is_authenticated():
+        return render_template('login.html', error=None, next_url='/')
     return render_template('index.html')
 
 
