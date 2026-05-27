@@ -1386,11 +1386,14 @@ async function loadStages() {
         const data = await response.json();
         
         if (data.success) {
-            stages = data.stages;
+            const loadedStages = Array.isArray(data.stages) ? data.stages : [];
+            stages = loadedStages.length > 0 ? loadedStages : [...STAGES];
             populateStageFilter(stages);
         }
     } catch (error) {
         console.error('Error loading stages:', error);
+        stages = [...STAGES];
+        populateStageFilter(stages);
     }
 }
 
@@ -2965,7 +2968,10 @@ function collectInlineOrderFormData() {
 }
 
 async function saveInlineOrder() {
-    if (!selectedOrderId) return;
+    if (!selectedOrderId) {
+        showError('Select an order first, or click New Order to create one.');
+        return;
+    }
 
     const data = collectInlineOrderFormData();
 
@@ -3051,8 +3057,10 @@ function showOrderModal(order) {
     
     // Populate stage dropdown
     const stageSelect = document.getElementById('stage');
-    stageSelect.innerHTML = stages.map(stage => 
-        `<option value="${stage}" ${order && order.stage === stage ? 'selected' : ''}>${stage}</option>`
+    const modalStages = [...new Set([...(Array.isArray(stages) ? stages : []), ...STAGES])];
+    const selectedStage = (order && order.stage) ? order.stage : 'ORDER_DETAILS';
+    stageSelect.innerHTML = modalStages.map(stage =>
+        `<option value="${stage}" ${selectedStage === stage ? 'selected' : ''}>${stage}</option>`
     ).join('');
     
     // Populate all form fields
