@@ -917,6 +917,20 @@ def dict_from_row(row):
     return dict(zip(row.keys(), row))
 
 
+def get_runtime_mode() -> str:
+    """Return LOCAL when running on localhost/private network, otherwise LIVE."""
+    host = (request.host or '').lower()
+    host_only = host.split(':', 1)[0]
+
+    if host_only in ('localhost', '127.0.0.1', '::1'):
+        return 'LOCAL'
+
+    if host_only.startswith('192.168.') or host_only.startswith('10.') or host_only.startswith('172.'):
+        return 'LOCAL'
+
+    return 'LIVE'
+
+
 def _coerce_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
@@ -1032,7 +1046,14 @@ def index():
     """Serve the main HTML page"""
     if not _is_authenticated():
         return render_template('login.html', error=None, next_url='/')
-    return render_template('index.html')
+
+    runtime_mode = get_runtime_mode()
+    runtime_mode_class = 'runtime-badge-local' if runtime_mode == 'LOCAL' else 'runtime-badge-live'
+    return render_template(
+        'index.html',
+        runtime_mode=runtime_mode,
+        runtime_mode_class=runtime_mode_class
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])

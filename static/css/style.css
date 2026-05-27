@@ -90,6 +90,35 @@ body {
     color: var(--text-secondary);
 }
 
+.header-subtitle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.runtime-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 10px;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.04em;
+}
+
+.runtime-badge-local {
+    color: #8ef0c0;
+    border-color: rgba(76, 175, 80, 0.45);
+    background: rgba(76, 175, 80, 0.14);
+}
+
+.runtime-badge-live {
+    color: #9ecbff;
+    border-color: rgba(33, 150, 243, 0.5);
+    background: rgba(33, 150, 243, 0.16);
+}
+
 .helper-status {
     display: flex;
     align-items: center;
