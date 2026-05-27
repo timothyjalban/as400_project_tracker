@@ -197,15 +197,7 @@ def _is_admin() -> bool:
 
 @app.before_request
 def security_before_request():
-    # Optional HTTP -> HTTPS redirect when deployed behind TLS.
-    if ENFORCE_HTTPS:
-        forwarded_proto = (request.headers.get('X-Forwarded-Proto') or '').lower().strip()
-        is_secure = request.is_secure or forwarded_proto == 'https'
-        should_redirect = request.url.startswith('http://') and (forwarded_proto == 'http' or not forwarded_proto)
-        if should_redirect and not is_secure and request.method in ('GET', 'HEAD'):
-            return redirect(request.url.replace('http://', 'https://', 1), code=301)
-
-    public_paths = {'/login'}
+    public_paths = {'/', '/login'}
     if request.path in public_paths or request.path.startswith('/static/'):
         return None
 
