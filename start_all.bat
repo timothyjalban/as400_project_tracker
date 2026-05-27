@@ -30,11 +30,11 @@ echo Using Python: %PYTHON_EXE%
 echo.
 
 echo Starting Web App...
-start "Order Tracker Web App" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && \"%PYTHON_EXE%\" app.py"
+start "Order Tracker Web App" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && ""%PYTHON_EXE%"" app.py"
 timeout /t 2 /nobreak >nul
 
 echo Starting Desktop Helper...
-start "Order Tracker Desktop Helper" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && \"%PYTHON_EXE%\" desktop_helper_service.py"
+start "Order Tracker Desktop Helper" cmd /k "set ORDER_TRACKER_DB_PATH=%ORDER_TRACKER_DB_PATH% && ""%PYTHON_EXE%"" desktop_helper_service.py"
 timeout /t 2 /nobreak >nul
 
 echo.
