@@ -8,7 +8,7 @@ services:
       - key: ORDER_TRACKER_PRODUCTION
         value: "1"
       - key: ORDER_TRACKER_ENFORCE_HTTPS
-        value: "1"
+        value: "0"
       - key: ORDER_TRACKER_COOKIE_SECURE
         value: "1"
       - key: ORDER_TRACKER_HOST
