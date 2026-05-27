@@ -328,6 +328,17 @@ ITEM_VENDOR_DEFAULTS = {
     'window': ['Milgard', 'Andersen', 'Pella'],
 }
 
+VENDOR_SERIES_DEFAULTS = {
+    'window': {
+        'Milgard': ['C700'],
+    },
+    'door': {}
+}
+
+FIN_TYPE_DEFAULTS = [
+    '1" Setback',
+]
+
 
 def get_vendor_catalog() -> List[Dict[str, Any]]:
     """Return normalized vendor catalog with SKU values from desktop project data."""
@@ -369,6 +380,8 @@ def get_db_connection():
     ensure_customer_profiles_schema(conn)
     ensure_item_style_options_schema(conn)
     ensure_item_vendor_options_schema(conn)
+    ensure_vendor_series_options_schema(conn)
+    ensure_fin_type_options_schema(conn)
     return conn
 
 
@@ -861,6 +874,93 @@ def fetch_item_vendor_options(conn):
             vendors[item_type].append(vendor_name)
 
     return vendors
+
+
+def ensure_vendor_series_options_schema(conn):
+    """Create and seed vendor-specific series options for line items."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vendor_series_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_type TEXT NOT NULL,
+            vendor_name TEXT NOT NULL,
+            series_name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(item_type, vendor_name COLLATE NOCASE, series_name COLLATE NOCASE)
+        )
+        """
+    )
+
+    for item_type, vendors in VENDOR_SERIES_DEFAULTS.items():
+        for vendor_name, series_names in vendors.items():
+            for series_name in series_names:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO vendor_series_options (item_type, vendor_name, series_name)
+                    VALUES (?, ?, ?)
+                    """,
+                    (item_type, vendor_name, series_name),
+                )
+
+    conn.commit()
+
+
+def fetch_vendor_series_options(conn):
+    """Return vendor-specific series options grouped by item_type and vendor."""
+    options = {'door': {}, 'window': {}}
+    cursor = conn.execute(
+        """
+        SELECT item_type, vendor_name, series_name
+          FROM vendor_series_options
+         WHERE item_type IN ('door', 'window')
+         ORDER BY item_type, vendor_name COLLATE NOCASE, series_name COLLATE NOCASE
+        """
+    )
+
+    for row in cursor.fetchall():
+        item_type = row['item_type']
+        vendor_name = row['vendor_name']
+        series_name = row['series_name']
+
+        if item_type not in options:
+            continue
+
+        options[item_type].setdefault(vendor_name, []).append(series_name)
+
+    return options
+
+
+def ensure_fin_type_options_schema(conn):
+    """Create and seed global fin type options for line items."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fin_type_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fin_type_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+    for fin_type_name in FIN_TYPE_DEFAULTS:
+        conn.execute(
+            "INSERT OR IGNORE INTO fin_type_options (fin_type_name) VALUES (?)",
+            (fin_type_name,),
+        )
+
+    conn.commit()
+
+
+def fetch_fin_type_options(conn):
+    """Return ordered global fin type option list."""
+    rows = conn.execute(
+        """
+        SELECT fin_type_name
+          FROM fin_type_options
+         ORDER BY fin_type_name COLLATE NOCASE
+        """
+    ).fetchall()
+    return [row['fin_type_name'] for row in rows]
 
 
 def normalize_po_numbers(raw_value):
@@ -1482,6 +1582,129 @@ def create_item_vendor_option():
         return jsonify({
             'success': True,
             'vendors': vendors
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/vendor-series-options', methods=['GET'])
+def get_vendor_series_options_api():
+    """Get vendor-specific series options for door/window line items."""
+    try:
+        conn = get_db_connection()
+        series = fetch_vendor_series_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'series': series
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/vendor-series-options', methods=['POST'])
+def create_vendor_series_option_api():
+    """Create a vendor-specific series option."""
+    try:
+        data = request.get_json() or {}
+        item_type = str(data.get('item_type', '')).strip().lower()
+        vendor_name = str(data.get('vendor_name', '')).strip()
+        series_name = str(data.get('series_name', '')).strip()
+
+        if item_type not in ('door', 'window'):
+            return jsonify({
+                'success': False,
+                'error': 'item_type must be door or window'
+            }), 400
+
+        if not vendor_name:
+            return jsonify({
+                'success': False,
+                'error': 'vendor_name is required'
+            }), 400
+
+        if not series_name:
+            return jsonify({
+                'success': False,
+                'error': 'series_name is required'
+            }), 400
+
+        conn = get_db_connection()
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO vendor_series_options (item_type, vendor_name, series_name)
+            VALUES (?, ?, ?)
+            """,
+            (item_type, vendor_name, series_name),
+        )
+        conn.commit()
+
+        series = fetch_vendor_series_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'series': series
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/fin-type-options', methods=['GET'])
+def get_fin_type_options_api():
+    """Get global fin type options for line items."""
+    try:
+        conn = get_db_connection()
+        fin_types = fetch_fin_type_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'fin_types': fin_types
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/fin-type-options', methods=['POST'])
+def create_fin_type_option_api():
+    """Create a global fin type option."""
+    try:
+        data = request.get_json() or {}
+        fin_type_name = str(data.get('fin_type_name', '')).strip()
+
+        if not fin_type_name:
+            return jsonify({
+                'success': False,
+                'error': 'fin_type_name is required'
+            }), 400
+
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT OR IGNORE INTO fin_type_options (fin_type_name) VALUES (?)",
+            (fin_type_name,),
+        )
+        conn.commit()
+
+        fin_types = fetch_fin_type_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'fin_types': fin_types
         })
     except Exception as e:
         return jsonify({

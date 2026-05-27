@@ -106,6 +106,7 @@ const DEFAULT_ITEM_VENDOR_OPTIONS = {
     door: ['Jeld-Wen', 'Masonite', 'Therma-Tru'],
     window: ['Milgard', 'Andersen', 'Pella']
 };
+const DEFAULT_FIN_TYPE_OPTIONS = ['1" Setback'];
 let itemStyleOptions = {
     door: [...DEFAULT_ITEM_STYLE_OPTIONS.door],
     window: [...DEFAULT_ITEM_STYLE_OPTIONS.window]
@@ -114,6 +115,11 @@ let itemVendorOptions = {
     door: [...DEFAULT_ITEM_VENDOR_OPTIONS.door],
     window: [...DEFAULT_ITEM_VENDOR_OPTIONS.window]
 };
+let vendorSeriesOptions = {
+    door: {},
+    window: {}
+};
+let finTypeOptions = [...DEFAULT_FIN_TYPE_OPTIONS];
 let vendorSkuByName = {};
 let windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
 const HIGH_CONTRAST_STORAGE_KEY = 'order_tracker_high_contrast_enabled';
@@ -416,6 +422,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load persistent Door/Window vendor options
     loadItemVendorOptions();
 
+    // Load vendor-specific series options for line items
+    loadVendorSeriesOptions();
+
+    // Load global fin type options for line items
+    loadFinTypeOptions();
+
     // Load vendor SKU catalog from desktop project data
     loadVendorCatalog();
 
@@ -627,6 +639,9 @@ function createLineItemTemplate(type) {
         vendor: '',
         vendor_sku: '',
         room: '',
+        series: '',
+        fin_type: '',
+        argon_included: '',
         style: '',
         material: '',
         swing: '',
@@ -653,6 +668,9 @@ function normalizeLineItem(rawItem) {
     }
     if (!item.price && (rawItem?.unit_price || rawItem?.quote_total)) {
         item.price = rawItem.unit_price || rawItem.quote_total || '';
+    }
+    if (!item.argon_included && rawItem?.argon !== undefined && rawItem?.argon !== null) {
+        item.argon_included = String(rawItem.argon).trim();
     }
     item.ui_collapsed = Boolean(rawItem?.ui_collapsed ?? rawItem?.collapsed ?? false);
     return item;
@@ -865,6 +883,53 @@ function getVendorOptionsForType(itemType) {
     return DEFAULT_ITEM_VENDOR_OPTIONS[normalizedType];
 }
 
+function normalizeVendorSeriesMap(input) {
+    const normalized = { door: {}, window: {} };
+    if (!input || typeof input !== 'object') {
+        return normalized;
+    }
+
+    for (const itemType of ['door', 'window']) {
+        const byVendor = input[itemType];
+        if (!byVendor || typeof byVendor !== 'object') {
+            continue;
+        }
+
+        for (const [vendorName, seriesList] of Object.entries(byVendor)) {
+            const cleanVendor = String(vendorName || '').trim();
+            if (!cleanVendor) continue;
+            const cleanSeries = Array.isArray(seriesList)
+                ? seriesList.map(name => String(name || '').trim()).filter(Boolean)
+                : [];
+            normalized[itemType][cleanVendor] = Array.from(new Set(cleanSeries)).sort((a, b) => a.localeCompare(b));
+        }
+    }
+
+    return normalized;
+}
+
+function getSeriesOptionsForItemVendor(itemType, vendorName) {
+    const normalizedType = itemType === 'window' ? 'window' : 'door';
+    const cleanVendor = String(vendorName || '').trim();
+    if (!cleanVendor) return [];
+
+    const byVendor = vendorSeriesOptions?.[normalizedType] || {};
+    const direct = byVendor[cleanVendor];
+    if (Array.isArray(direct)) {
+        return direct;
+    }
+
+    const fallbackKey = Object.keys(byVendor).find(name => name.toLowerCase() === cleanVendor.toLowerCase());
+    return fallbackKey ? (byVendor[fallbackKey] || []) : [];
+}
+
+function getFinTypeOptions() {
+    const options = Array.isArray(finTypeOptions) && finTypeOptions.length > 0
+        ? finTypeOptions
+        : DEFAULT_FIN_TYPE_OPTIONS;
+    return Array.from(new Set(options.map(name => String(name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
 function normalizeVendorKey(name) {
     return String(name || '').trim().toLowerCase();
 }
@@ -942,6 +1007,39 @@ async function loadItemVendorOptions() {
         }
     } catch (error) {
         console.warn('Unable to load item vendor options, using defaults.', error);
+    }
+}
+
+async function loadVendorSeriesOptions() {
+    try {
+        const response = await fetch(`${API_BASE}/vendor-series-options`);
+        const data = await response.json();
+        if (!data.success) return;
+
+        vendorSeriesOptions = normalizeVendorSeriesMap(data.series);
+        if (currentLineItems.length > 0) {
+            renderLineItemsEditor();
+        }
+    } catch (error) {
+        console.warn('Unable to load vendor series options.', error);
+    }
+}
+
+async function loadFinTypeOptions() {
+    try {
+        const response = await fetch(`${API_BASE}/fin-type-options`);
+        const data = await response.json();
+        if (!data.success) return;
+
+        finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
+            ? data.fin_types
+            : [...DEFAULT_FIN_TYPE_OPTIONS];
+
+        if (currentLineItems.length > 0) {
+            renderLineItemsEditor();
+        }
+    } catch (error) {
+        console.warn('Unable to load fin type options.', error);
     }
 }
 
@@ -1027,6 +1125,85 @@ async function addItemVendor(itemType) {
     }
 }
 
+async function addVendorSeriesOption(itemType, index) {
+    const normalizedType = itemType === 'window' ? 'window' : 'door';
+    const item = currentLineItems[index];
+    if (!item) return;
+
+    const vendorName = String(item.vendor || '').trim();
+    if (!vendorName) {
+        showError('Select a vendor before adding a series');
+        return;
+    }
+
+    const seriesName = prompt(`Add a new ${vendorName} series:`);
+    if (seriesName === null) return;
+    const trimmedSeriesName = seriesName.trim();
+    if (!trimmedSeriesName) {
+        showError('Series name cannot be empty');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/vendor-series-options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                item_type: normalizedType,
+                vendor_name: vendorName,
+                series_name: trimmedSeriesName
+            })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            showError(data.error || 'Failed to save series option');
+            return;
+        }
+
+        vendorSeriesOptions = normalizeVendorSeriesMap(data.series);
+        updateLineItem(index, 'series', trimmedSeriesName);
+        renderLineItemsEditor();
+        showToast(`${trimmedSeriesName} added for ${vendorName}`);
+    } catch (error) {
+        console.error('Error saving vendor series option:', error);
+        showError('Failed to save series option');
+    }
+}
+
+async function addFinTypeOption() {
+    const finTypeName = prompt('Add a new fin type:');
+    if (finTypeName === null) return;
+    const trimmedFinTypeName = finTypeName.trim();
+    if (!trimmedFinTypeName) {
+        showError('Fin type cannot be empty');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/fin-type-options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fin_type_name: trimmedFinTypeName })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            showError(data.error || 'Failed to save fin type');
+            return;
+        }
+
+        finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
+            ? data.fin_types
+            : [...DEFAULT_FIN_TYPE_OPTIONS];
+        renderLineItemsEditor();
+        showToast(`${trimmedFinTypeName} added to fin types`);
+    } catch (error) {
+        console.error('Error saving fin type option:', error);
+        showError('Failed to save fin type option');
+    }
+}
+
 function renderOptionButtons(index, field, options, selectedValue) {
     return options
         .map(option => {
@@ -1069,6 +1246,14 @@ function renderLineItemsEditor() {
     lineItemsList.innerHTML = currentLineItems.map((item, index) => {
         const isDoor = item.type === 'door';
         const isCollapsed = Boolean(item.ui_collapsed);
+        const seriesOptions = getSeriesOptionsForItemVendor(item.type, item.vendor);
+        const seriesOptionsWithSelected = item.series && !seriesOptions.includes(item.series)
+            ? [item.series, ...seriesOptions]
+            : seriesOptions;
+        const finOptions = getFinTypeOptions();
+        const finOptionsWithSelected = item.fin_type && !finOptions.includes(item.fin_type)
+            ? [item.fin_type, ...finOptions]
+            : finOptions;
         return `
             <div class="line-item-card">
                 <div class="line-item-header">
@@ -1151,6 +1336,29 @@ function renderLineItemsEditor() {
                         </select>
                         `}
                         ${item.vendor_sku ? `<div class="item-vendor-sku">SKU: ${escapeHtml(item.vendor_sku)}</div>` : ''}
+                    </div>
+
+                    <div class="line-item-field">
+                        <label>Series</label>
+                        <select data-item-index="${index}" data-item-field="series">
+                            ${renderSelectOptions(seriesOptionsWithSelected, item.series, item.vendor ? 'Select series' : 'Choose vendor first')}
+                        </select>
+                        <button type="button" class="item-add-style-button" data-add-series-index="${index}" data-add-series-type="${item.type}">+ Add Series for Vendor</button>
+                    </div>
+
+                    <div class="line-item-field">
+                        <label>Fin Type</label>
+                        <select data-item-index="${index}" data-item-field="fin_type">
+                            ${renderSelectOptions(finOptionsWithSelected, item.fin_type, 'Select fin type')}
+                        </select>
+                        <button type="button" class="item-add-style-button" data-add-fin-type="true">+ Add Fin Type</button>
+                    </div>
+
+                    <div class="line-item-field">
+                        <label>Argon Included</label>
+                        <select data-item-index="${index}" data-item-field="argon_included">
+                            ${renderSelectOptions(['Included', 'Not Included'], item.argon_included, 'Select argon option')}
+                        </select>
                     </div>
 
                     <div class="line-item-field">
@@ -1251,6 +1459,20 @@ function bindLineItemsEditorEvents() {
         button.addEventListener('click', async () => {
             const itemType = button.getAttribute('data-add-vendor-type');
             await addItemVendor(itemType);
+        });
+    });
+
+    lineItemsList.querySelectorAll('[data-add-series-index]').forEach(button => {
+        button.addEventListener('click', async () => {
+            const index = parseInt(button.getAttribute('data-add-series-index'), 10);
+            const itemType = button.getAttribute('data-add-series-type');
+            await addVendorSeriesOption(itemType, index);
+        });
+    });
+
+    lineItemsList.querySelectorAll('[data-add-fin-type]').forEach(button => {
+        button.addEventListener('click', async () => {
+            await addFinTypeOption();
         });
     });
 
