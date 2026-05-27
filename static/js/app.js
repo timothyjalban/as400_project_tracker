@@ -650,6 +650,22 @@ function removeLineItem(index) {
     syncLineItemsToHiddenField();
 }
 
+function moveLineItem(index, direction) {
+    const fromIndex = Number.isInteger(index) ? index : parseInt(index, 10);
+    const moveDirection = Number.isInteger(direction) ? direction : parseInt(direction, 10);
+
+    if (!Number.isInteger(fromIndex) || !Number.isInteger(moveDirection)) return;
+    if (!currentLineItems[fromIndex]) return;
+
+    const toIndex = fromIndex + moveDirection;
+    if (toIndex < 0 || toIndex >= currentLineItems.length) return;
+
+    const [movedItem] = currentLineItems.splice(fromIndex, 1);
+    currentLineItems.splice(toIndex, 0, movedItem);
+    renderLineItemsEditor();
+    syncLineItemsToHiddenField();
+}
+
 function getNextRoomLocationValue(value) {
     const raw = String(value ?? '');
     const trimmed = raw.trim();
@@ -1006,6 +1022,8 @@ function renderLineItemsEditor() {
                         <button type="button" class="item-type-button ${!isDoor ? 'active' : ''}" data-item-index="${index}" data-item-field="type" data-item-value="window">Window</button>
                     </div>
                     <div class="line-item-header-actions">
+                        <button type="button" class="item-move-button" data-item-move-up="${index}" ${index === 0 ? 'disabled' : ''} title="Move item up">Up</button>
+                        <button type="button" class="item-move-button" data-item-move-down="${index}" ${index === currentLineItems.length - 1 ? 'disabled' : ''} title="Move item down">Down</button>
                         <button type="button" class="item-collapse-button" data-item-toggle="${index}">${isCollapsed ? 'Expand' : 'Collapse'}</button>
                         <button type="button" class="item-copy-button" data-item-copy="${index}">Copy</button>
                         <button type="button" class="item-remove-button" data-item-remove="${index}">Remove</button>
@@ -1121,6 +1139,20 @@ function renderLineItemsEditor() {
 
 function bindLineItemsEditorEvents() {
     if (!lineItemsList) return;
+
+    lineItemsList.querySelectorAll('[data-item-move-up]').forEach(button => {
+        button.addEventListener('click', () => {
+            const index = parseInt(button.getAttribute('data-item-move-up'), 10);
+            moveLineItem(index, -1);
+        });
+    });
+
+    lineItemsList.querySelectorAll('[data-item-move-down]').forEach(button => {
+        button.addEventListener('click', () => {
+            const index = parseInt(button.getAttribute('data-item-move-down'), 10);
+            moveLineItem(index, 1);
+        });
+    });
 
     lineItemsList.querySelectorAll('[data-item-remove]').forEach(button => {
         button.addEventListener('click', () => {

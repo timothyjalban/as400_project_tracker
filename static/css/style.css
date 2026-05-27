@@ -780,6 +780,7 @@ body {
 
 .item-type-button,
 .item-option-button,
+.item-move-button,
 .item-collapse-button,
 .item-copy-button,
 .item-remove-button {
@@ -790,6 +791,17 @@ body {
     cursor: pointer;
     font-size: var(--font-size-sm);
     padding: 6px 10px;
+}
+
+.item-move-button {
+    border-color: rgba(3, 169, 244, 0.45);
+    color: #b3e5fc;
+    background-color: rgba(3, 169, 244, 0.12);
+}
+
+.item-move-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .item-type-button.active,
