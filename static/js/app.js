@@ -925,14 +925,22 @@ function getSeriesOptionsForItemVendor(itemType, vendorName) {
     const cleanVendor = String(vendorName || '').trim();
     if (!cleanVendor) return [];
 
-    const byVendor = vendorSeriesOptions?.[normalizedType] || {};
-    const direct = byVendor[cleanVendor];
-    if (Array.isArray(direct)) {
-        return direct;
+    const searchTypes = [normalizedType, normalizedType === 'window' ? 'door' : 'window'];
+
+    for (const typeKey of searchTypes) {
+        const byVendor = vendorSeriesOptions?.[typeKey] || {};
+        const direct = byVendor[cleanVendor];
+        if (Array.isArray(direct) && direct.length > 0) {
+            return direct;
+        }
+
+        const fallbackKey = Object.keys(byVendor).find(name => name.toLowerCase() === cleanVendor.toLowerCase());
+        if (fallbackKey && Array.isArray(byVendor[fallbackKey]) && byVendor[fallbackKey].length > 0) {
+            return byVendor[fallbackKey];
+        }
     }
 
-    const fallbackKey = Object.keys(byVendor).find(name => name.toLowerCase() === cleanVendor.toLowerCase());
-    return fallbackKey ? (byVendor[fallbackKey] || []) : [];
+    return [];
 }
 
 function getFinTypeOptions() {
