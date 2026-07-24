@@ -27,6 +27,13 @@ import os
 import urllib.request
 import urllib.error
 
+
+from data import config
+
+print("DB PATH:", config.DB_PATH)
+
+
+
 try:
     from data.vendors import COMMON_VENDORS
 except Exception:
@@ -34,14 +41,16 @@ except Exception:
 
 # Import OCR processor
 try:
-    from ocr_processor import process_bulk_form_pdf, ocr_pdf
+    from ocr_processor import process_bulk_form_pdf, process_image_file, process_ocr_text, ocr_pdf
     HAS_OCR = True
-    print("✅ OCR processor loaded successfully")
+    print("OCR processor loaded successfully")
 except ImportError as e:
     HAS_OCR = False
     process_bulk_form_pdf = None
+    process_image_file = None
+    process_ocr_text = None
     ocr_pdf = None
-    print(f"⚠️  OCR processor not available: {e}")
+    print(f"OCR processor not available: {e}")
 
 app = Flask(__name__)
 
@@ -55,15 +64,25 @@ if _cors_origins_raw:
 
 logger = logging.getLogger(__name__)
 
-# Rate limiter – keyed on remote IP so brute-force attempts are blocked per-client.
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-_limiter = Limiter(
-    key_func=get_remote_address,
-    app=app,
-    default_limits=[],          # no blanket limit; only routes we decorate
-    storage_uri='memory://',    # upgrade to redis:// in multi-process deploys
-)
+# Rate limiter - keyed on remote IP so brute-force attempts are blocked per-client.
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    _limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=[],          # no blanket limit; only routes we decorate
+        storage_uri='memory://',    # upgrade to redis:// in multi-process deploys
+    )
+except ImportError:
+    class _NoopLimiter:
+        def limit(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+            return decorator
+
+    _limiter = _NoopLimiter()
+    logger.warning('flask_limiter is not installed; login rate limiting is disabled')
 
 # Session/security configuration
 app.secret_key = os.environ.get('ORDER_TRACKER_SECRET_KEY') or os.urandom(32)
@@ -80,28 +99,55 @@ AUTH_DEFAULT_USERNAME = os.environ.get('ORDER_TRACKER_ADMIN_USERNAME', 'admin').
 AUTH_DEFAULT_PASSWORD = os.environ.get('ORDER_TRACKER_ADMIN_PASSWORD', '').strip()
 AUTH_DEFAULT_PASSWORD_HASH = os.environ.get('ORDER_TRACKER_ADMIN_PASSWORD_HASH', '').strip()
 AUTH_ALLOW_INSECURE_DEFAULT_LOGIN = (os.environ.get('ORDER_TRACKER_ALLOW_INSECURE_DEFAULT_LOGIN', '1') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
+AUTH_DISABLE_LOGIN = (os.environ.get('ORDER_TRACKER_DISABLE_AUTH', '0') or '0').strip().lower() in ('1', 'true', 'yes', 'on')
 ENFORCE_HTTPS = (os.environ.get('ORDER_TRACKER_ENFORCE_HTTPS', '0') or '0').strip().lower() in ('1', 'true', 'yes', 'on')
 DESKTOP_HELPER_LOCAL_ONLY = (os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY', '1') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
-def resolve_db_path(preferred_path):
-    """Return a writable DB path, falling back to /tmp when needed."""
-    import tempfile
+from core import (
+    DB_PATH,
+    DESKTOP_HELPER_BASE_URL,
+    call_desktop_helper,
+    STAGES,
+    compute_stage_priority,
+    coerce_optional_int,
+    ITEM_STYLE_DEFAULTS,
+    ITEM_VENDOR_DEFAULTS,
+    VENDOR_SERIES_DEFAULTS,
+    FIN_TYPE_DEFAULTS,
+    FIN_TYPE_ALIASES,
+    normalize_fin_type_name,
+    get_vendor_catalog,
+    get_db_connection,
+    ensure_orders_schema,
+    ensure_order_notes_schema,
+    ensure_attachments_schema,
+    ensure_customer_profiles_schema,
+    normalize_phone_digits,
+    build_customer_profile_key,
+    upsert_customer_profile,
+    ensure_item_style_options_schema,
+    fetch_item_style_options,
+    ensure_item_vendor_options_schema,
+    fetch_item_vendor_options,
+    ensure_vendor_series_options_schema,
+    fetch_vendor_series_options,
+    ensure_fin_type_options_schema,
+    fetch_fin_type_options,
+    ensure_window_color_options_schema,
+    fetch_window_color_options,
+    normalize_po_numbers,
+    apply_po_fields,
+    attach_po_display,
+    dict_from_row,
+    get_runtime_mode,
+    _coerce_bool,
+    _quote_identifier,
+    _table_exists,
+    _table_columns,
+    _upsert_table_rows,
+)
 
-    candidate = Path(preferred_path) if preferred_path else Path(tempfile.gettempdir()) / 'orders.db'
-    fallback = Path(tempfile.gettempdir()) / 'orders.db'
-
-    try:
-        candidate.parent.mkdir(parents=True, exist_ok=True)
-        probe_path = candidate.parent / '.db_write_probe'
-        probe_path.write_text('', encoding='utf-8')
-        probe_path.unlink(missing_ok=True)
-        return candidate
-    except Exception:
-        if candidate != fallback:
-            print(f"WARNING: DB path {candidate} is not writable; falling back to {fallback}")
-        fallback.parent.mkdir(parents=True, exist_ok=True)
-        return fallback
 
 
 def _load_auth_users() -> Dict[str, Dict[str, str]]:
@@ -188,10 +234,14 @@ def _is_local_request() -> bool:
 
 
 def _is_authenticated() -> bool:
+    if AUTH_DISABLE_LOGIN:
+        return True
     return bool(session.get('username'))
 
 
 def _is_admin() -> bool:
+    if AUTH_DISABLE_LOGIN:
+        return True
     return session.get('role') == 'admin'
 
 
@@ -232,956 +282,6 @@ def security_after_request(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
-# Path to the SQLite database. Override via ORDER_TRACKER_DB_PATH env var for production.
-DB_PATH = resolve_db_path(os.environ.get('ORDER_TRACKER_DB_PATH', db_config.DB_PATH))
-db_config.DB_PATH = DB_PATH
-DESKTOP_HELPER_BASE_URL = os.environ.get('DESKTOP_HELPER_BASE_URL', 'http://127.0.0.1:5001/api').rstrip('/')
-
-
-def call_desktop_helper(endpoint: str, method: str = 'GET', payload: Optional[Dict[str, Any]] = None, timeout: float = 2.0):
-    """Call local desktop helper service and return (payload_dict, status_code)."""
-    url = f"{DESKTOP_HELPER_BASE_URL}/{endpoint.lstrip('/')}"
-    body = None
-    headers = {}
-
-    if payload is not None:
-        body = json.dumps(payload).encode('utf-8')
-        headers['Content-Type'] = 'application/json'
-
-    request_obj = urllib.request.Request(url=url, data=body, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(request_obj, timeout=timeout) as response:
-            raw = response.read().decode('utf-8')
-            data = json.loads(raw) if raw else {}
-            return data, response.getcode()
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode('utf-8', errors='replace')
-        try:
-            data = json.loads(raw) if raw else {}
-        except Exception:
-            data = {'success': False, 'error': raw or str(exc)}
-        return data, exc.code
-    except Exception as exc:
-        return {
-            'success': False,
-            'error': f'Desktop helper unavailable: {exc}'
-        }, 503
-
-# Stage sequence (same as desktop app)
-STAGES = [
-    "QUOTE_CREATED",
-    "QUOTE_SIGNOFF_RECEIVED",
-    "INVOICE_CREATED",
-    "COST_SHEET_PREPARED",
-    "PACKET_TO_BUYER",
-    "PO_CREATED",
-    "ORDER_PLACED_WITH_VENDOR",
-    "VENDOR_ACK_RECEIVED",
-    "ETA_CONFIRMED",
-    "SHIP_TICKET_RECEIVED",
-    "TRANSFERRED_TO_STORE",
-    "CUSTOMER_NOTIFIED_READY",
-    "INVOICE_TO_WILL_CALL",
-    "PICKED_UP",
-    "RETURNED",
-    "CLOSED",
-]
-
-
-def compute_stage_priority(stage: Any) -> int:
-    """Map stage position to a 0-100 priority scale (higher stage => higher priority)."""
-    stage_value = str(stage or '').strip()
-    if not stage_value or stage_value not in STAGES:
-        return 0
-
-    if len(STAGES) == 1:
-        return 100
-
-    index = STAGES.index(stage_value)
-    ratio = index / (len(STAGES) - 1)
-    return int(round(ratio * 100))
-
-
-def coerce_optional_int(value: Any):
-    """Convert value to int if present, else return None."""
-    if value is None:
-        return None
-
-    if isinstance(value, str):
-        value = value.strip()
-        if value == '':
-            return None
-
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-ITEM_STYLE_DEFAULTS = {
-    'door': ['Slab', 'Prehung', 'French', 'Patio'],
-    'window': ['Single Hung', 'Double Hung', 'Casement', 'Sliding', 'Picture'],
-}
-
-ITEM_VENDOR_DEFAULTS = {
-    'door': ['Jeld-Wen', 'Masonite', 'Therma-Tru'],
-    'window': ['Milgard', 'Andersen', 'Pella'],
-}
-
-VENDOR_SERIES_DEFAULTS = {
-    'window': {
-        'Milgard': ['C700'],
-    },
-    'door': {}
-}
-
-FIN_TYPE_DEFAULTS = [
-    '1" Setback',
-]
-
-FIN_TYPE_ALIASES = {
-    '1': '1" Setback',
-    '1 setback': '1" Setback',
-}
-
-
-def normalize_fin_type_name(value: Any) -> str:
-    """Normalize fin type text and map legacy aliases to canonical labels."""
-    clean = str(value or '').strip()
-    if not clean:
-        return ''
-    return FIN_TYPE_ALIASES.get(clean.lower(), clean)
-
-
-def get_vendor_catalog() -> List[Dict[str, Any]]:
-    """Return normalized vendor catalog with SKU values from desktop project data."""
-    catalog = []
-    seen = set()
-
-    for vendor in COMMON_VENDORS:
-        name = str(vendor.get('name') or '').strip()
-        if not name:
-            continue
-
-        key = name.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-
-        sku_value = vendor.get('sku')
-        try:
-            sku_value = int(sku_value) if sku_value is not None else None
-        except (TypeError, ValueError):
-            sku_value = None
-
-        catalog.append({
-            'name': name,
-            'sku': sku_value
-        })
-
-    catalog.sort(key=lambda item: item['name'].lower())
-    return catalog
-
-def get_db_connection():
-    """Create a database connection"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-    ensure_orders_schema(conn)
-    ensure_order_notes_schema(conn)
-    ensure_attachments_schema(conn)
-    ensure_reminders_schema(conn)
-    ensure_customer_profiles_schema(conn)
-    ensure_item_style_options_schema(conn)
-    ensure_item_vendor_options_schema(conn)
-    ensure_vendor_series_options_schema(conn)
-    ensure_fin_type_options_schema(conn)
-    return conn
-
-
-def ensure_orders_schema(conn):
-    """Ensure the orders table exists and all optional columns used by the web app exist."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_name TEXT,
-            customer_phone TEXT,
-            customer_email TEXT,
-            project_name TEXT,
-            quote_number TEXT,
-            quote_date TEXT,
-            quote_total REAL,
-            quote_number_2 TEXT,
-            quote_date_2 TEXT,
-            quote_total_2 REAL,
-            invoice_number TEXT,
-            invoice_date TEXT,
-            invoice_total REAL,
-            po_number TEXT,
-            po_numbers TEXT,
-            po_date_signed TEXT,
-            vendor TEXT,
-            product_type TEXT,
-            stage TEXT,
-            priority_manual INTEGER,
-            line_items TEXT,
-            additional_quotes TEXT,
-            vendor_ack_number TEXT,
-            vendor_ack_total REAL,
-            eta_date TEXT,
-            transfer_location TEXT,
-            transfer_done_at TEXT,
-            quote_done_at TEXT,
-            signoff_done_at TEXT,
-            invoice_done_at TEXT,
-            costsheet_done_at TEXT,
-            packet_done_at TEXT,
-            po_done_at TEXT,
-            order_placed_done_at TEXT,
-            ack_received_done_at TEXT,
-            eta_confirmed_done_at TEXT,
-            ship_ticket_done_at TEXT,
-            customer_arrival_notified_done_at TEXT,
-            will_call_done_at TEXT,
-            door_shop_will_call_done_at TEXT,
-            picked_up_done_at TEXT,
-            closed_done_at TEXT,
-            install_quote_done_at TEXT,
-            install_approved_done_at TEXT,
-            install_street TEXT,
-            install_city TEXT,
-            install_state TEXT,
-            install_zip TEXT,
-            delivery_street TEXT,
-            delivery_city TEXT,
-            delivery_state TEXT,
-            delivery_zip TEXT,
-            address_street TEXT,
-            address_city TEXT,
-            address_state TEXT,
-            address_zip TEXT,
-            customer_number TEXT,
-            has_customer_account INTEGER DEFAULT 0,
-            customer_profile_id INTEGER,
-            default_project_notes TEXT,
-            archived INTEGER DEFAULT 0,
-            is_pinned INTEGER DEFAULT 0,
-            is_flagged INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_stage ON orders(stage)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_customer_name ON orders(customer_name)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_po_number ON orders(po_number)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_po_numbers ON orders(po_numbers)")
-
-    cursor = conn.execute("PRAGMA table_info(orders)")
-    columns = {row[1] for row in cursor.fetchall()}
-
-    if 'po_numbers' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN po_numbers TEXT")
-        conn.commit()
-
-    if 'is_pinned' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN is_pinned INTEGER DEFAULT 0")
-        conn.commit()
-
-    if 'is_flagged' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN is_flagged INTEGER DEFAULT 0")
-        conn.commit()
-
-    # Stage-smart fields used by Transfer To Store UI.
-    if 'transfer_location' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN transfer_location TEXT")
-        conn.commit()
-
-    if 'transfer_done_at' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN transfer_done_at TEXT")
-        conn.commit()
-
-    if 'quote_number_2' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN quote_number_2 TEXT")
-        conn.commit()
-
-    if 'quote_date_2' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN quote_date_2 TEXT")
-        conn.commit()
-
-    if 'quote_total_2' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN quote_total_2 REAL")
-        conn.commit()
-
-    if 'vendor_ack_total' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN vendor_ack_total REAL")
-        conn.commit()
-
-    if 'additional_quotes' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN additional_quotes TEXT")
-        conn.commit()
-
-    if 'customer_number' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN customer_number TEXT")
-        conn.commit()
-
-    if 'has_customer_account' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN has_customer_account INTEGER DEFAULT 0")
-        conn.commit()
-
-    if 'customer_profile_id' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN customer_profile_id INTEGER")
-        conn.commit()
-
-    # Install stage timestamps and generic address fields.
-
-    if 'install_quote_done_at' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_quote_done_at TEXT")
-        conn.commit()
-
-    if 'install_approved_done_at' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_approved_done_at TEXT")
-        conn.commit()
-
-    if 'install_street' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_street TEXT")
-        conn.commit()
-
-    if 'install_city' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_city TEXT")
-        conn.commit()
-
-    if 'install_state' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_state TEXT")
-        conn.commit()
-
-    if 'install_zip' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN install_zip TEXT")
-        conn.commit()
-
-    if 'delivery_street' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN delivery_street TEXT")
-        conn.commit()
-
-    if 'delivery_city' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN delivery_city TEXT")
-        conn.commit()
-
-    if 'delivery_state' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN delivery_state TEXT")
-        conn.commit()
-
-    if 'delivery_zip' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN delivery_zip TEXT")
-        conn.commit()
-
-    if 'address_street' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN address_street TEXT")
-        conn.commit()
-
-    if 'address_city' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN address_city TEXT")
-        conn.commit()
-
-    if 'address_state' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN address_state TEXT")
-        conn.commit()
-
-    if 'address_zip' not in columns:
-        conn.execute("ALTER TABLE orders ADD COLUMN address_zip TEXT")
-        conn.commit()
-
-    # Backfill po_numbers for legacy rows that only used po_number.
-    conn.execute(
-        """
-        UPDATE orders
-           SET po_numbers = po_number
-         WHERE (po_numbers IS NULL OR TRIM(po_numbers) = '')
-           AND po_number IS NOT NULL
-           AND TRIM(po_number) != ''
-        """
-    )
-
-    # Ensure pin/flag values are never NULL for consistent sorting and UI logic.
-    conn.execute("UPDATE orders SET is_pinned = 0 WHERE is_pinned IS NULL")
-    conn.execute("UPDATE orders SET is_flagged = 0 WHERE is_flagged IS NULL")
-    conn.execute("UPDATE orders SET has_customer_account = 0 WHERE has_customer_account IS NULL")
-
-    # Keep account flag aligned when account number exists.
-    conn.execute(
-        """
-        UPDATE orders
-           SET has_customer_account = 1
-         WHERE customer_number IS NOT NULL
-           AND TRIM(customer_number) != ''
-        """
-    )
-
-    # Normalize legacy transfer-location labels to current UI values.
-    conn.execute(
-        """
-        UPDATE orders
-           SET transfer_location = '41st'
-         WHERE transfer_location IS NOT NULL
-           AND lower(trim(transfer_location)) = 'capitola'
-        """
-    )
-    conn.execute(
-        """
-        UPDATE orders
-           SET transfer_location = 'Door Shop'
-         WHERE transfer_location IS NOT NULL
-           AND lower(trim(transfer_location)) = 'salinas'
-        """
-    )
-    conn.execute(
-        """
-        UPDATE orders
-           SET transfer_location = NULL
-         WHERE transfer_location IS NOT NULL
-           AND lower(trim(transfer_location)) = 'aptos'
-        """
-    )
-    conn.commit()
-
-
-def ensure_order_notes_schema(conn):
-    """Create the order notes table used by notes endpoints."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS order_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id INTEGER NOT NULL,
-            note TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_order_notes_order_id ON order_notes(order_id)")
-    conn.commit()
-
-
-def ensure_attachments_schema(conn):
-    """Create the attachments table used by attachment endpoints."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS attachments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id INTEGER NOT NULL,
-            section TEXT,
-            filename TEXT NOT NULL,
-            rel_path TEXT NOT NULL,
-            added_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_order_id ON attachments(order_id)")
-    conn.commit()
-
-
-def ensure_customer_profiles_schema(conn):
-    """Create customer profiles table used for customer-first workflows."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS customer_profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            profile_key TEXT NOT NULL UNIQUE,
-            customer_name TEXT,
-            customer_phone TEXT,
-            customer_email TEXT,
-            customer_number TEXT,
-            default_project_notes TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_customer_profiles_number ON customer_profiles(customer_number)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_customer_profiles_name ON customer_profiles(customer_name)")
-    conn.commit()
-
-
-def normalize_phone_digits(value: Any) -> str:
-    return re.sub(r'\D+', '', str(value or ''))
-
-
-def build_customer_profile_key(name: Any, phone: Any, number: Any) -> str:
-    number_key = str(number or '').strip().lower()
-    if number_key:
-        return f"acct:{number_key}"
-
-    name_key = str(name or '').strip().lower()
-    phone_key = normalize_phone_digits(phone)
-    return f"name:{name_key}|phone:{phone_key}"
-
-
-def upsert_customer_profile(conn, payload: Dict[str, Any]):
-    """Create/update a customer profile and return profile id."""
-    customer_name = str(payload.get('customer_name') or '').strip()
-    customer_phone = str(payload.get('customer_phone') or '').strip()
-    customer_email = str(payload.get('customer_email') or '').strip()
-    customer_number = str(payload.get('customer_number') or '').strip()
-    default_project_notes = payload.get('default_project_notes')
-
-    if not customer_name:
-        return None
-
-    profile_key = build_customer_profile_key(customer_name, customer_phone, customer_number)
-
-    existing = None
-    if customer_number:
-        existing = conn.execute(
-            "SELECT * FROM customer_profiles WHERE customer_number = ? ORDER BY id DESC LIMIT 1",
-            (customer_number,),
-        ).fetchone()
-
-    if not existing:
-        existing = conn.execute(
-            "SELECT * FROM customer_profiles WHERE profile_key = ? LIMIT 1",
-            (profile_key,),
-        ).fetchone()
-
-    if existing:
-        updates = {
-            'customer_name': customer_name or existing['customer_name'],
-            'customer_phone': customer_phone or existing['customer_phone'],
-            'customer_email': customer_email or existing['customer_email'],
-            'customer_number': customer_number or existing['customer_number'],
-            'profile_key': build_customer_profile_key(
-                customer_name or existing['customer_name'],
-                customer_phone or existing['customer_phone'],
-                customer_number or existing['customer_number'],
-            ),
-            'updated_at': datetime.now().isoformat(),
-        }
-
-        if default_project_notes is not None:
-            updates['default_project_notes'] = default_project_notes
-
-        set_clause = ', '.join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [existing['id']]
-        conn.execute(f"UPDATE customer_profiles SET {set_clause} WHERE id = ?", values)
-        conn.commit()
-        return existing['id']
-
-    conn.execute(
-        """
-        INSERT INTO customer_profiles (
-            profile_key, customer_name, customer_phone, customer_email,
-            customer_number, default_project_notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            profile_key,
-            customer_name,
-            customer_phone or None,
-            customer_email or None,
-            customer_number or None,
-            default_project_notes,
-            datetime.now().isoformat(),
-            datetime.now().isoformat(),
-        ),
-    )
-    conn.commit()
-    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-
-
-def ensure_item_style_options_schema(conn):
-    """Create and seed persistent style options for line items."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS item_style_options (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_type TEXT NOT NULL,
-            style_name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(item_type, style_name COLLATE NOCASE)
-        )
-        """
-    )
-
-    for item_type, style_names in ITEM_STYLE_DEFAULTS.items():
-        for style_name in style_names:
-            conn.execute(
-                "INSERT OR IGNORE INTO item_style_options (item_type, style_name) VALUES (?, ?)",
-                (item_type, style_name),
-            )
-
-    conn.commit()
-
-
-def fetch_item_style_options(conn):
-    """Return style options grouped by item type."""
-    styles = {'door': [], 'window': []}
-    cursor = conn.execute(
-        """
-        SELECT item_type, style_name
-          FROM item_style_options
-         WHERE item_type IN ('door', 'window')
-         ORDER BY item_type, style_name COLLATE NOCASE
-        """
-    )
-
-    for row in cursor.fetchall():
-        item_type = row['item_type']
-        style_name = row['style_name']
-        if item_type in styles:
-            styles[item_type].append(style_name)
-
-    return styles
-
-
-def ensure_item_vendor_options_schema(conn):
-    """Create and seed persistent vendor options for line items."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS item_vendor_options (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_type TEXT NOT NULL,
-            vendor_name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(item_type, vendor_name COLLATE NOCASE)
-        )
-        """
-    )
-
-    for item_type, vendor_names in ITEM_VENDOR_DEFAULTS.items():
-        for vendor_name in vendor_names:
-            conn.execute(
-                "INSERT OR IGNORE INTO item_vendor_options (item_type, vendor_name) VALUES (?, ?)",
-                (item_type, vendor_name),
-            )
-
-    # Also seed from the desktop app vendor catalog so SKUs are available in web flow.
-    for vendor in get_vendor_catalog():
-        vendor_name = vendor.get('name')
-        if not vendor_name:
-            continue
-        for item_type in ('door', 'window'):
-            conn.execute(
-                "INSERT OR IGNORE INTO item_vendor_options (item_type, vendor_name) VALUES (?, ?)",
-                (item_type, vendor_name),
-            )
-
-    conn.commit()
-
-
-def fetch_item_vendor_options(conn):
-    """Return vendor options grouped by item type."""
-    vendors = {'door': [], 'window': []}
-    cursor = conn.execute(
-        """
-        SELECT item_type, vendor_name
-          FROM item_vendor_options
-         WHERE item_type IN ('door', 'window')
-         ORDER BY item_type, vendor_name COLLATE NOCASE
-        """
-    )
-
-    for row in cursor.fetchall():
-        item_type = row['item_type']
-        vendor_name = row['vendor_name']
-        if item_type in vendors:
-            vendors[item_type].append(vendor_name)
-
-    return vendors
-
-
-def ensure_vendor_series_options_schema(conn):
-    """Create and seed vendor-specific series options for line items."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS vendor_series_options (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_type TEXT NOT NULL,
-            vendor_name TEXT NOT NULL,
-            series_name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(item_type, vendor_name COLLATE NOCASE, series_name COLLATE NOCASE)
-        )
-        """
-    )
-
-    for item_type, vendors in VENDOR_SERIES_DEFAULTS.items():
-        for vendor_name, series_names in vendors.items():
-            for series_name in series_names:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO vendor_series_options (item_type, vendor_name, series_name)
-                    VALUES (?, ?, ?)
-                    """,
-                    (item_type, vendor_name, series_name),
-                )
-
-    conn.commit()
-
-
-def fetch_vendor_series_options(conn):
-    """Return vendor-specific series options grouped by item_type and vendor."""
-    options = {'door': {}, 'window': {}}
-    cursor = conn.execute(
-        """
-        SELECT item_type, vendor_name, series_name
-          FROM vendor_series_options
-         WHERE item_type IN ('door', 'window')
-         ORDER BY item_type, vendor_name COLLATE NOCASE, series_name COLLATE NOCASE
-        """
-    )
-
-    for row in cursor.fetchall():
-        item_type = row['item_type']
-        vendor_name = row['vendor_name']
-        series_name = row['series_name']
-
-        if item_type not in options:
-            continue
-
-        options[item_type].setdefault(vendor_name, []).append(series_name)
-
-    return options
-
-
-def ensure_fin_type_options_schema(conn):
-    """Create and seed global fin type options for line items."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS fin_type_options (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fin_type_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-
-    # Migrate legacy/partial values (e.g., "1") to canonical labels.
-    rows = conn.execute(
-        "SELECT id, fin_type_name FROM fin_type_options"
-    ).fetchall()
-
-    for row in rows:
-        option_id = row['id']
-        original_name = row['fin_type_name']
-        normalized_name = normalize_fin_type_name(original_name)
-
-        if not normalized_name:
-            conn.execute("DELETE FROM fin_type_options WHERE id = ?", (option_id,))
-            continue
-
-        if normalized_name == original_name:
-            continue
-
-        try:
-            conn.execute(
-                "UPDATE fin_type_options SET fin_type_name = ? WHERE id = ?",
-                (normalized_name, option_id),
-            )
-        except sqlite3.IntegrityError:
-            # Duplicate after normalization; keep one canonical row.
-            conn.execute("DELETE FROM fin_type_options WHERE id = ?", (option_id,))
-
-    for fin_type_name in FIN_TYPE_DEFAULTS:
-        normalized_name = normalize_fin_type_name(fin_type_name)
-        if not normalized_name:
-            continue
-        conn.execute(
-            "INSERT OR IGNORE INTO fin_type_options (fin_type_name) VALUES (?)",
-            (normalized_name,),
-        )
-
-    conn.commit()
-
-
-def fetch_fin_type_options(conn):
-    """Return ordered global fin type option list."""
-    rows = conn.execute(
-        """
-        SELECT fin_type_name
-          FROM fin_type_options
-         ORDER BY fin_type_name COLLATE NOCASE
-        """
-    ).fetchall()
-    return [row['fin_type_name'] for row in rows]
-
-
-def normalize_po_numbers(raw_value):
-    """Return a de-duplicated list of PO numbers from list/string input."""
-    if raw_value is None:
-        return []
-
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = re.split(r'[,;\n|]+', str(raw_value))
-
-    normalized = []
-    seen = set()
-    for value in candidates:
-        po = str(value).strip()
-        if not po:
-            continue
-        key = po.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        normalized.append(po)
-
-    return normalized
-
-
-def apply_po_fields(payload):
-    """Normalize PO fields and keep po_number + po_numbers synchronized."""
-    raw_po_values = payload.get('po_numbers')
-    if raw_po_values is None:
-        raw_po_values = payload.get('po_number')
-
-    if raw_po_values is None:
-        return
-
-    po_list = normalize_po_numbers(raw_po_values)
-
-    if po_list:
-        payload['po_number'] = po_list[0]
-        payload['po_numbers'] = ', '.join(po_list)
-    else:
-        payload['po_number'] = None
-        payload['po_numbers'] = None
-
-
-def attach_po_display(order_dict):
-    """Add a display-ready PO string for frontend usage."""
-    order_dict['po_numbers_display'] = order_dict.get('po_numbers') or order_dict.get('po_number') or ''
-    return order_dict
-
-def dict_from_row(row):
-    """Convert sqlite3.Row to dict"""
-    return dict(zip(row.keys(), row))
-
-
-def get_runtime_mode() -> str:
-    """Return LOCAL when running on localhost/private network, otherwise LIVE."""
-    host = (request.host or '').lower()
-    host_only = host.split(':', 1)[0]
-
-    if host_only in ('localhost', '127.0.0.1', '::1'):
-        return 'LOCAL'
-
-    if host_only.startswith('192.168.') or host_only.startswith('10.') or host_only.startswith('172.'):
-        return 'LOCAL'
-
-    return 'LIVE'
-
-
-def _coerce_bool(value: Any, default: bool = False) -> bool:
-    if value is None:
-        return default
-    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
-
-
-def _quote_identifier(identifier: str) -> str:
-    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', identifier or ''):
-        raise ValueError(f'Invalid SQL identifier: {identifier}')
-    return f'"{identifier}"'
-
-
-def _table_exists(conn, table_name: str) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-        (table_name,)
-    ).fetchone()
-    return row is not None
-
-
-def _table_columns(conn, table_name: str) -> List[str]:
-    table_sql = _quote_identifier(table_name)
-    rows = conn.execute(f"PRAGMA table_info({table_sql})").fetchall()
-    columns: List[str] = []
-    for row in rows:
-        try:
-            columns.append(row['name'])
-        except Exception:
-            columns.append(row[1])
-    return columns
-
-
-def _upsert_table_rows(conn, table_name: str, rows: Any) -> Dict[str, int]:
-    stats = {'inserted': 0, 'updated': 0, 'skipped': 0}
-
-    if not isinstance(rows, list) or not rows:
-        return stats
-
-    if not _table_exists(conn, table_name):
-        stats['skipped'] = len(rows)
-        return stats
-
-    columns = _table_columns(conn, table_name)
-    if not columns:
-        stats['skipped'] = len(rows)
-        return stats
-
-    id_column = 'id' if 'id' in columns else None
-    writable_columns = [col for col in columns if col != id_column]
-
-    table_sql = _quote_identifier(table_name)
-
-    for entry in rows:
-        if not isinstance(entry, dict):
-            stats['skipped'] += 1
-            continue
-
-        requested_id = None
-        if id_column:
-            raw_id = entry.get(id_column)
-            if raw_id not in (None, ''):
-                try:
-                    requested_id = int(raw_id)
-                except (TypeError, ValueError):
-                    requested_id = None
-
-        row_values = {
-            col: entry.get(col)
-            for col in writable_columns
-            if col in entry
-        }
-
-        if requested_id is not None and id_column:
-            id_sql = _quote_identifier(id_column)
-            existing = conn.execute(
-                f"SELECT 1 FROM {table_sql} WHERE {id_sql} = ? LIMIT 1",
-                (requested_id,)
-            ).fetchone()
-
-            if existing:
-                if row_values:
-                    set_clause = ', '.join(f"{_quote_identifier(col)} = ?" for col in row_values.keys())
-                    conn.execute(
-                        f"UPDATE {table_sql} SET {set_clause} WHERE {id_sql} = ?",
-                        [*row_values.values(), requested_id]
-                    )
-                stats['updated'] += 1
-                continue
-
-        insert_columns = list(row_values.keys())
-        insert_values = list(row_values.values())
-
-        if id_column and requested_id is not None:
-            insert_columns = [id_column, *insert_columns]
-            insert_values = [requested_id, *insert_values]
-
-        if not insert_columns:
-            stats['skipped'] += 1
-            continue
-
-        cols_sql = ', '.join(_quote_identifier(col) for col in insert_columns)
-        placeholders = ', '.join('?' for _ in insert_columns)
-        conn.execute(
-            f"INSERT INTO {table_sql} ({cols_sql}) VALUES ({placeholders})",
-            insert_values
-        )
-        stats['inserted'] += 1
-
-    return stats
 
 @app.route('/')
 def index():
@@ -1201,6 +301,9 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 @_limiter.limit('15 per minute; 50 per hour', methods=['POST'])
 def login():
+    if AUTH_DISABLE_LOGIN:
+        return redirect(request.args.get('next', '/') or '/')
+
     error = None
     next_url = request.args.get('next', '/')
     if not str(next_url).startswith('/'):
@@ -1244,6 +347,7 @@ def get_orders():
     stage = request.args.get('stage', '')
     show_completed = request.args.get('show_completed', 'false').lower() == 'true'
     
+    conn = None
     try:
         conn = get_db_connection()
         
@@ -1283,8 +387,6 @@ def get_orders():
         # Convert to list of dicts
         orders = [attach_po_display(dict_from_row(row)) for row in rows]
         
-        conn.close()
-        
         return jsonify({
             'success': True,
             'orders': orders,
@@ -1292,10 +394,17 @@ def get_orders():
         })
     
     except Exception as e:
+        logger.exception('get_orders failed (search=%r, stage=%r, show_completed=%r)', search, stage, show_completed)
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
@@ -1326,6 +435,7 @@ def get_order(order_id):
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
     """Update an existing order"""
+    conn = None
     try:
         data = request.get_json()
         
@@ -1337,8 +447,10 @@ def update_order(order_id):
 
         apply_po_fields(data)
 
+        auto_added_has_customer_account = False
         if 'customer_number' in data and 'has_customer_account' not in data:
             data['has_customer_account'] = 1 if str(data.get('customer_number') or '').strip() else 0
+            auto_added_has_customer_account = True
         
         conn = get_db_connection()
 
@@ -1349,7 +461,6 @@ def update_order(order_id):
         ).fetchone()
 
         if not existing_row:
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'Order not found'
@@ -1361,6 +472,84 @@ def update_order(order_id):
         
         # Filter data to only include fields that exist in the database
         update_fields = {k: v for k, v in data.items() if k in columns and k != 'id'}
+
+        # The main order edit form always submits a full, freshly-populated snapshot of
+        # every field (see showOrderModal in app.js), so a blank there means the user
+        # deliberately cleared it and must be saved as-is. Only narrow, partial-update
+        # callers (quick inline edits that intentionally omit unrelated fields) still get
+        # the blank-preserve safety net below, since those can't be trusted to represent
+        # an intentional clear of a field they weren't even editing.
+        full_form_save = bool(data.get('_full_form_save'))
+
+        # Stale/hidden forms can send blank customer fields while the visible inline
+        # fields still contain the real values. Never let those blanks wipe saved data.
+        blank_preserve_fields = set() if full_form_save else {
+            'customer_name',
+            'customer_phone',
+            'customer_email',
+            'customer_number',
+            'project_name',
+            'quote_number',
+            'quote_date',
+            'quote_total',
+            'quote_number_2',
+            'quote_date_2',
+            'quote_total_2',
+            'invoice_number',
+            'invoice_date',
+            'invoice_total',
+            'po_numbers',
+            'po_date_signed',
+            'vendor_ack_number',
+            'vendor_ack_total',
+            'eta_date',
+        }
+        for field in blank_preserve_fields:
+            if field not in update_fields:
+                continue
+            if str(update_fields.get(field) or '').strip():
+                continue
+
+            existing_value = str(existing_row[field] or '').strip() if field in existing_row.keys() else ''
+            if existing_value or field != 'customer_name':
+                update_fields.pop(field, None)
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Customer name is required'
+                }), 400
+
+        if auto_added_has_customer_account and 'customer_number' not in update_fields:
+            update_fields.pop('has_customer_account', None)
+        # If a quote number is newly set and quote_date is blank, auto-stamp today.
+        if 'quote_number' in columns and 'quote_date' in columns and 'quote_number' in update_fields:
+            incoming_quote = str(update_fields.get('quote_number') or '').strip()
+            existing_quote = str(existing_row['quote_number'] or '').strip()
+            existing_quote_date = str(existing_row['quote_date'] or '').strip()
+            incoming_quote_date = str(update_fields.get('quote_date') or '').strip() if 'quote_date' in update_fields else ''
+
+            if incoming_quote and incoming_quote != existing_quote and not existing_quote_date and not incoming_quote_date:
+                update_fields['quote_date'] = datetime.now().date().isoformat()
+
+        # If an invoice number is newly set and invoice_date is blank, auto-stamp today.
+        if 'invoice_number' in columns and 'invoice_date' in columns and 'invoice_number' in update_fields:
+            incoming_invoice = str(update_fields.get('invoice_number') or '').strip()
+            existing_invoice = str(existing_row['invoice_number'] or '').strip()
+            existing_invoice_date = str(existing_row['invoice_date'] or '').strip()
+            incoming_invoice_date = str(update_fields.get('invoice_date') or '').strip() if 'invoice_date' in update_fields else ''
+
+            if incoming_invoice and incoming_invoice != existing_invoice and not existing_invoice_date and not incoming_invoice_date:
+                update_fields['invoice_date'] = datetime.now().date().isoformat()
+
+        # If PO/special-order number is newly set and PO date is blank, auto-stamp today.
+        if 'po_date_signed' in columns and ('po_number' in update_fields or 'po_numbers' in update_fields):
+            incoming_po = str(update_fields.get('po_numbers') or update_fields.get('po_number') or '').strip()
+            existing_po = str(existing_row['po_numbers'] or existing_row['po_number'] or '').strip()
+            existing_po_date = str(existing_row['po_date_signed'] or '').strip()
+            incoming_po_date = str(update_fields.get('po_date_signed') or '').strip() if 'po_date_signed' in update_fields else ''
+
+            if incoming_po and incoming_po != existing_po and not existing_po_date and not incoming_po_date:
+                update_fields['po_date_signed'] = datetime.now().date().isoformat()
 
         profile_payload = {
             'customer_name': update_fields.get('customer_name', existing_row['customer_name']),
@@ -1394,7 +583,6 @@ def update_order(order_id):
                     update_fields['priority_manual'] = compute_stage_priority(update_fields['stage'])
         
         if not update_fields:
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'No valid fields to update'
@@ -1415,8 +603,6 @@ def update_order(order_id):
         # Fetch updated order
         cursor = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
         row = cursor.fetchone()
-        conn.close()
-        
         if row:
             return jsonify({
                 'success': True,
@@ -1430,10 +616,18 @@ def update_order(order_id):
             }), 404
     
     except Exception as e:
+        payload_keys = sorted(list((data or {}).keys())) if 'data' in locals() and isinstance(data, dict) else []
+        logger.exception('update_order failed (order_id=%s, payload_keys=%s)', order_id, payload_keys)
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/stages', methods=['GET'])
 def get_stages():
@@ -1483,10 +677,10 @@ def create_item_style_option():
         item_type = str(data.get('item_type', '')).strip().lower()
         style_name = str(data.get('style_name', '')).strip()
 
-        if item_type not in ('door', 'window'):
+        if item_type not in ('door', 'window', 'hardware'):
             return jsonify({
                 'success': False,
-                'error': 'item_type must be door or window'
+                'error': 'item_type must be door, window, or hardware'
             }), 400
 
         if not style_name:
@@ -1524,10 +718,10 @@ def delete_item_style_option():
         item_type = str(data.get('item_type', '')).strip().lower()
         style_name = str(data.get('style_name', '')).strip()
 
-        if item_type not in ('door', 'window'):
+        if item_type not in ('door', 'window', 'hardware'):
             return jsonify({
                 'success': False,
-                'error': 'item_type must be door or window'
+                'error': 'item_type must be door, window, or hardware'
             }), 400
 
         if not style_name:
@@ -1599,10 +793,10 @@ def create_item_vendor_option():
         item_type = str(data.get('item_type', '')).strip().lower()
         vendor_name = str(data.get('vendor_name', '')).strip()
 
-        if item_type not in ('door', 'window'):
+        if item_type not in ('door', 'window', 'hardware'):
             return jsonify({
                 'success': False,
-                'error': 'item_type must be door or window'
+                'error': 'item_type must be door, window, or hardware'
             }), 400
 
         if not vendor_name:
@@ -1660,10 +854,10 @@ def create_vendor_series_option_api():
         vendor_name = str(data.get('vendor_name', '')).strip()
         series_name = str(data.get('series_name', '')).strip()
 
-        if item_type not in ('door', 'window'):
+        if item_type not in ('door', 'window', 'hardware'):
             return jsonify({
                 'success': False,
-                'error': 'item_type must be door or window'
+                'error': 'item_type must be door, window, or hardware'
             }), 400
 
         if not vendor_name:
@@ -1754,6 +948,58 @@ def create_fin_type_option_api():
             'error': str(e)
         }), 500
 
+@app.route('/api/window-color-options', methods=['GET'])
+def get_window_color_options_api():
+    """Get global window color options for line items."""
+    try:
+        conn = get_db_connection()
+        colors = fetch_window_color_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'colors': colors
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/window-color-options', methods=['POST'])
+def create_window_color_option_api():
+    """Create a global window color option."""
+    try:
+        data = request.get_json() or {}
+        color_name = str(data.get('color_name', '')).strip()
+
+        if not color_name:
+            return jsonify({
+                'success': False,
+                'error': 'color_name is required'
+            }), 400
+
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT OR IGNORE INTO window_color_options (color_name) VALUES (?)",
+            (color_name,),
+        )
+        conn.commit()
+
+        colors = fetch_window_color_options(conn)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'colors': colors
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/orders', methods=['POST'])
 def create_order():
     """Create a new order"""
@@ -1766,10 +1012,54 @@ def create_order():
                 'error': 'No data provided'
             }), 400
 
+        # Compatibility normalization for OCR/import payload variants.
+        if not data.get('customer_phone') and data.get('phone'):
+            data['customer_phone'] = data.get('phone')
+        if not data.get('customer_email') and data.get('email'):
+            data['customer_email'] = data.get('email')
+        if not data.get('address_street') and data.get('address'):
+            data['address_street'] = data.get('address')
+
+        if not data.get('line_items') and data.get('bulk_items'):
+            bulk_items = data.get('bulk_items')
+            if isinstance(bulk_items, str):
+                try:
+                    bulk_items = json.loads(bulk_items)
+                except Exception:
+                    bulk_items = []
+
+            if isinstance(bulk_items, list):
+                normalized_items = []
+                for item in bulk_items:
+                    if not isinstance(item, dict):
+                        continue
+                    normalized_items.append({
+                        'product': item.get('product') or 'Door',
+                        'quantity': item.get('quantity', ''),
+                        'width': item.get('width', ''),
+                        'height': item.get('height', ''),
+                        'size': item.get('size') or (f"{item.get('width', '')}x{item.get('height', '')}" if item.get('width') and item.get('height') else ''),
+                        'config': item.get('config', ''),
+                        'jamb_size': item.get('jamb_size', ''),
+                        'swing': item.get('swing', ''),
+                        'hinges': item.get('hinges', ''),
+                        'boring': item.get('boring', ''),
+                        'sill_bottom': item.get('sill_bottom', ''),
+                        'color': item.get('color') or item.get('color_finish', ''),
+                        'glass': item.get('glass') or item.get('glass_type', ''),
+                        'hardware': item.get('hardware', ''),
+                        'special_notes': item.get('special_notes', ''),
+                    })
+
+                if normalized_items:
+                    data['line_items'] = json.dumps(normalized_items)
+
         apply_po_fields(data)
 
+        auto_added_has_customer_account = False
         if 'customer_number' in data and 'has_customer_account' not in data:
             data['has_customer_account'] = 1 if str(data.get('customer_number') or '').strip() else 0
+            auto_added_has_customer_account = True
 
         # Ensure default stage for new orders
         if not data.get('stage'):
@@ -2487,6 +1777,44 @@ def download_attachment(attachment_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/attachments/<int:attachment_id>/open', methods=['GET'])
+def open_attachment(attachment_id):
+    """Open an attachment inline in the browser when supported"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.execute("SELECT filename, rel_path FROM attachments WHERE id = ?", (attachment_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({
+                'success': False,
+                'error': 'Attachment not found'
+            }), 404
+
+        from flask import send_file
+
+        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        file_path = attach_base / row['rel_path']
+
+        if not file_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'File not found on disk'
+            }), 404
+
+        return send_file(
+            str(file_path),
+            as_attachment=False,
+            download_name=row['filename']
+        )
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/orders/<int:order_id>/archive', methods=['PUT'])
 def archive_order(order_id):
     """Archive an order (mark as completed)"""
@@ -3122,79 +2450,129 @@ def get_contacts():
 
 # ===== BULK IMPORT ENDPOINTS =====
 
-@app.route('/api/import/bulk', methods=['POST'])
-def bulk_import_json():
-    """Import multiple orders from JSON file with duplicate detection"""
+def _parse_bulk_form_csv(raw_text: str) -> Dict[str, Any]:
+    """Parse desktop-exported bulk form CSV into the same shape as JSON imports."""
+    data: Dict[str, Any] = {
+        'customer_info': {},
+        'items': [],
+    }
+
+    reader = csv.DictReader(io.StringIO(raw_text))
+    for row in reader:
+        row_number = str(row.get('Row') or '').strip()
+        if not row_number:
+            continue
+        if row_number.lower() == 'customer information':
+            continue
+        if not row_number.isdigit():
+            continue
+
+        data['items'].append({
+            'quantity': str(row.get('Quantity') or '').strip(),
+            'width': str(row.get('Width') or '').strip(),
+            'height': str(row.get('Height') or '').strip(),
+            'config': str(row.get('Config') or '').strip(),
+            'jamb_size': str(row.get('Jamb Size') or '').strip(),
+            'swing': str(row.get('Swing') or '').strip(),
+            'hinges': str(row.get('Hinges') or '').strip(),
+            'boring': str(row.get('Boring') or '').strip(),
+            'sill_bottom': str(row.get('Sill & Bottom') or '').strip(),
+            'color_finish': str(row.get('Color/Finish') or '').strip(),
+            'glass_type': str(row.get('Glass Type') or '').strip(),
+            'hardware': str(row.get('Hardware') or '').strip(),
+            'special_notes': str(row.get('Special Notes') or '').strip(),
+        })
+
+    for row in csv.reader(io.StringIO(raw_text)):
+        if len(row) < 2:
+            continue
+        key = str(row[0] or '').strip().lower()
+        value = str(row[1] or '').strip()
+        if key == 'name':
+            data['customer_info']['customer_name'] = value
+        elif key == 'phone':
+            data['customer_info']['phone'] = value
+        elif key == 'email':
+            data['customer_info']['email'] = value
+        elif key == 'project':
+            data['customer_info']['project'] = value
+        elif key in ('po', 'po number', 'po_number'):
+            data['customer_info']['po_number'] = value
+
+    return data
+
+
+def _load_bulk_import_data(file_storage) -> Dict[str, Any]:
+    filename = (file_storage.filename or '').strip()
+    suffix = Path(filename).suffix.lower()
+    raw = file_storage.read()
+
+    if suffix == '.json':
+        payload = json.loads(raw)
+    elif suffix == '.csv':
+        payload = _parse_bulk_form_csv(raw.decode('utf-8-sig', errors='replace'))
+    else:
+        raise ValueError('Only JSON and CSV files are supported')
+
+    if not isinstance(payload, dict):
+        raise ValueError('Import file must contain a JSON/CSV object payload')
+
+    return payload
+
+
+def _import_bulk_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    customer_info = data.get('customer_info', {})
+    customer_name = customer_info.get('customer_name', '')
+    customer_phone = customer_info.get('phone', '')
+    customer_email = customer_info.get('email', '')
+    project_name = customer_info.get('project', '')
+    raw_po = customer_info.get('po_number') or data.get('po_number') or data.get('po_numbers')
+    po_list = normalize_po_numbers(raw_po)
+    primary_po = po_list[0] if po_list else None
+    po_numbers = ', '.join(po_list) if po_list else None
+    items = data.get('items', [])
+
+    duplicate_id = check_duplicate_order(
+        customer_name,
+        customer_phone,
+        project_name,
+        len(items),
+        primary_po,
+    )
+
+    if duplicate_id:
+        return {
+            'success': False,
+            'duplicate': True,
+            'duplicate_id': duplicate_id,
+            'message': f'Duplicate of existing Order #{duplicate_id}',
+            'customer_name': customer_name,
+            'item_count': len(items),
+        }
+
+    line_items = []
+    for item in items:
+        line_items.append({
+            'product': 'Door',
+            'quantity': item.get('quantity', ''),
+            'width': item.get('width', ''),
+            'height': item.get('height', ''),
+            'size': f"{item.get('width', '')}x{item.get('height', '')}" if item.get('width') and item.get('height') else '',
+            'config': item.get('config', ''),
+            'jamb_size': item.get('jamb_size', ''),
+            'swing': item.get('swing', ''),
+            'hinges': item.get('hinges', ''),
+            'boring': item.get('boring', ''),
+            'sill_bottom': item.get('sill_bottom', ''),
+            'color': item.get('color_finish', ''),
+            'glass': item.get('glass_type', ''),
+            'hardware': item.get('hardware', ''),
+            'special_notes': item.get('special_notes', ''),
+        })
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'}), 400
-        
-        filename = file.filename or ''
-        if not filename.endswith('.json'):
-            return jsonify({'success': False, 'error': 'Only JSON files are supported'}), 400
-        
-        # Parse JSON data
-        data = json.loads(file.read())
-        
-        # Extract customer info
-        customer_info = data.get('customer_info', {})
-        customer_name = customer_info.get('customer_name', '')
-        customer_phone = customer_info.get('phone', '')
-        customer_email = customer_info.get('email', '')
-        project_name = customer_info.get('project', '')
-        raw_po = customer_info.get('po_number') or data.get('po_number') or data.get('po_numbers')
-        po_list = normalize_po_numbers(raw_po)
-        primary_po = po_list[0] if po_list else None
-        po_numbers = ', '.join(po_list) if po_list else None
-        items = data.get('items', [])
-        
-        # Check for duplicate
-        duplicate_id = check_duplicate_order(
-            customer_name, 
-            customer_phone, 
-            project_name, 
-            len(items),
-            primary_po
-        )
-        
-        if duplicate_id:
-            return jsonify({
-                'success': False,
-                'duplicate': True,
-                'duplicate_id': duplicate_id,
-                'message': f'Duplicate of existing Order #{duplicate_id}'
-            }), 200
-        
-        # Create line_items JSON
-        line_items = []
-        for item in items:
-            line_item = {
-                'product': 'Door',
-                'quantity': item.get('quantity', ''),
-                'width': item.get('width', ''),
-                'height': item.get('height', ''),
-                'size': f"{item.get('width', '')}x{item.get('height', '')}" if item.get('width') and item.get('height') else '',
-                'config': item.get('config', ''),
-                'jamb_size': item.get('jamb_size', ''),
-                'swing': item.get('swing', ''),
-                'hinges': item.get('hinges', ''),
-                'boring': item.get('boring', ''),
-                'sill_bottom': item.get('sill_bottom', ''),
-                'color': item.get('color_finish', ''),
-                'glass': item.get('glass_type', ''),
-                'hardware': item.get('hardware', ''),
-                'special_notes': item.get('special_notes', '')
-            }
-            line_items.append(line_item)
-        
-        # Create order
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         order_data = {
             'customer_name': customer_name,
             'customer_phone': customer_phone,
@@ -3206,38 +2584,194 @@ def bulk_import_json():
             'po_numbers': po_numbers,
             'line_items': json.dumps(line_items),
             'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
+            'updated_at': datetime.now().isoformat(),
         }
-        
-        cursor.execute("""
+
+        cursor.execute(
+            """
             INSERT INTO orders (
                 customer_name, customer_phone, customer_email, project_name,
                 product_type, stage, po_number, po_numbers, line_items, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            order_data['customer_name'],
-            order_data['customer_phone'],
-            order_data['customer_email'],
-            order_data['project_name'],
-            order_data['product_type'],
-            order_data['stage'],
-            order_data['po_number'],
-            order_data['po_numbers'],
-            order_data['line_items'],
-            order_data['created_at'],
-            order_data['updated_at']
-        ))
-        
+            """,
+            (
+                order_data['customer_name'],
+                order_data['customer_phone'],
+                order_data['customer_email'],
+                order_data['project_name'],
+                order_data['product_type'],
+                order_data['stage'],
+                order_data['po_number'],
+                order_data['po_numbers'],
+                order_data['line_items'],
+                order_data['created_at'],
+                order_data['updated_at'],
+            ),
+        )
         order_id = cursor.lastrowid
         conn.commit()
+    finally:
         conn.close()
-        
+
+    return {
+        'success': True,
+        'order_id': order_id,
+        'customer_name': customer_name,
+        'item_count': len(items),
+        'message': f'Successfully imported Order #{order_id}: {customer_name} ({len(items)} door(s))',
+    }
+
+def _bulk_payload_to_order_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a JSON/CSV bulk form payload into an order-shaped payload without inserting."""
+    customer_info = data.get('customer_info', {}) if isinstance(data, dict) else {}
+    items = data.get('items', []) if isinstance(data, dict) else []
+    if not isinstance(items, list):
+        items = []
+
+    raw_po = customer_info.get('po_number') or data.get('po_number') or data.get('po_numbers')
+    po_list = normalize_po_numbers(raw_po)
+    primary_po = po_list[0] if po_list else None
+    po_numbers = ', '.join(po_list) if po_list else None
+
+    line_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        line_items.append({
+            'product': 'Door',
+            'type': 'door',
+            'quantity': item.get('quantity', ''),
+            'width': item.get('width', ''),
+            'height': item.get('height', ''),
+            'size': f"{item.get('width', '')}x{item.get('height', '')}" if item.get('width') and item.get('height') else '',
+            'config': item.get('config', ''),
+            'jamb_size': item.get('jamb_size', ''),
+            'swing': item.get('swing', ''),
+            'hinges': item.get('hinges', ''),
+            'boring': item.get('boring', ''),
+            'sill_bottom': item.get('sill_bottom', ''),
+            'color': item.get('color_finish', ''),
+            'glass': item.get('glass_type', ''),
+            'hardware': item.get('hardware', ''),
+            'special_notes': item.get('special_notes', ''),
+        })
+
+    return {
+        'customer_name': customer_info.get('customer_name', ''),
+        'customer_phone': customer_info.get('phone', ''),
+        'customer_email': customer_info.get('email', ''),
+        'project_name': customer_info.get('project', ''),
+        'product_type': 'Door' if line_items else '',
+        'stage': 'QUOTE_CREATED',
+        'po_number': primary_po,
+        'po_numbers': po_numbers,
+        'line_items': json.dumps(line_items) if line_items else None,
+        'notes': f"Parsed from imported form file with {len(line_items)} item(s)",
+    }
+
+@app.route('/api/import/parse-file', methods=['POST'])
+def parse_import_file():
+    """Parse a JSON/CSV bulk import file without creating an order."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        filename = (file.filename or '').strip()
+        if not filename:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        data = _load_bulk_import_data(file)
+        order_payload = _bulk_payload_to_order_payload(data)
         return jsonify({
             'success': True,
-            'order_id': order_id,
-            'customer_name': customer_name,
-            'item_count': len(items),
-            'message': f'Successfully imported Order #{order_id}: {customer_name} ({len(items)} door(s))'
+            'parsed': True,
+            'data': {'orders': [order_payload]},
+            'message': f"Parsed {filename} without creating a new order",
+        })
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+@app.route('/api/import/bulk', methods=['POST'])
+def bulk_import_json():
+    """Import one or more JSON/CSV form files with duplicate detection."""
+    try:
+        files = request.files.getlist('files')
+        if not files and 'file' in request.files:
+            files = [request.files['file']]
+
+        if not files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        imported = []
+        duplicates = []
+        failed = []
+
+        for file in files:
+            filename = (file.filename or '').strip()
+            if not filename:
+                failed.append({'filename': filename or '(unnamed)', 'error': 'No file selected'})
+                continue
+
+            try:
+                data = _load_bulk_import_data(file)
+                outcome = _import_bulk_payload(data)
+            except ValueError as exc:
+                if len(files) == 1:
+                    return jsonify({'success': False, 'error': str(exc)}), 400
+                failed.append({'filename': filename, 'error': str(exc)})
+                continue
+            except Exception as exc:
+                failed.append({'filename': filename, 'error': str(exc)})
+                continue
+
+            if outcome.get('duplicate'):
+                duplicates.append({
+                    'filename': filename,
+                    'duplicate_id': outcome.get('duplicate_id'),
+                    'message': outcome.get('message'),
+                    'customer_name': outcome.get('customer_name'),
+                })
+            elif outcome.get('success'):
+                imported.append({
+                    'filename': filename,
+                    'order_id': outcome.get('order_id'),
+                    'customer_name': outcome.get('customer_name'),
+                    'item_count': outcome.get('item_count', 0),
+                    'message': outcome.get('message'),
+                })
+            else:
+                failed.append({'filename': filename, 'error': outcome.get('error') or 'Import failed'})
+
+        if len(files) == 1 and not imported and len(duplicates) == 1 and not failed:
+            duplicate = duplicates[0]
+            return jsonify({
+                'success': False,
+                'duplicate': True,
+                'duplicate_id': duplicate.get('duplicate_id'),
+                'message': duplicate.get('message') or 'Duplicate order detected',
+            }), 200
+
+        if len(files) == 1 and len(imported) == 1 and not duplicates and not failed:
+            result = imported[0]
+            return jsonify({
+                'success': True,
+                'order_id': result.get('order_id'),
+                'customer_name': result.get('customer_name'),
+                'item_count': result.get('item_count', 0),
+                'message': result.get('message') or 'Import succeeded',
+            })
+
+        return jsonify({
+            'success': len(failed) == 0,
+            'mode': 'batch',
+            'imported': imported,
+            'duplicates': duplicates,
+            'failed': failed,
+            'imported_count': len(imported),
+            'duplicate_count': len(duplicates),
+            'failed_count': len(failed),
+            'message': f"Batch import complete: {len(imported)} imported, {len(duplicates)} duplicates, {len(failed)} failed",
         })
         
     except Exception as e:
@@ -3897,7 +3431,15 @@ def desktop_helper_action_proxy(action):
         return jsonify({'success': False, 'error': 'Unsupported desktop helper action'}), 404
 
     payload = request.get_json() or {}
-    data, status = call_desktop_helper(action, method='POST', payload=payload, timeout=20.0)
+
+    # Launch automations can legitimately run for a while (window focus,
+    # AS400 navigation, quote capture). Use longer per-action timeouts so the
+    # proxy doesn't fail early with "timed out" while helper is still working.
+    launch_timeout = float(os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_LAUNCH_TIMEOUT', '180') or '180')
+    open_timeout = float(os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_OPEN_TIMEOUT', '45') or '45')
+    action_timeout = launch_timeout if action.startswith('launch-') else open_timeout
+
+    data, status = call_desktop_helper(action, method='POST', payload=payload, timeout=action_timeout)
     return jsonify(data), status
 
 
@@ -3954,21 +3496,8 @@ def ocr_process_pdf():
                     'error': 'Could not extract sufficient text from PDF'
                 }), 400
             
-            # DEBUG: Show extracted text
-            print("\n" + "="*80)
-            print("DEBUG: EXTRACTED TEXT FROM PDF:")
-            print("="*80)
-            print(all_text[:1000])  # First 1000 characters
-            print("="*80 + "\n")
-            
             # Try to parse as bulk form
             result = process_bulk_form_pdf(tmp_path)
-            
-            print(f"DEBUG: process_bulk_form_pdf returned: {result}")
-            print(f"DEBUG: result type: {type(result)}")
-            if 'orders' in result:
-                print(f"DEBUG: orders type: {type(result['orders'])}")
-                print(f"DEBUG: First order data: {result['orders'][0] if result['orders'] else 'empty'}")
             
             if 'error' in result:
                 # Return raw text if parsing fails
@@ -4001,6 +3530,97 @@ def ocr_process_pdf():
             'error': f'OCR processing error: {str(e)}'
         }), 500
 
+@app.route('/api/ocr/process-file', methods=['POST'])
+def ocr_process_file():
+    """Process a PDF or image file with OCR and extract order data."""
+    if not HAS_OCR:
+        return jsonify({
+            'success': False,
+            'error': 'OCR functionality not available. Install pytesseract and Tesseract-OCR.'
+        }), 500
+
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+
+        file = request.files['file']
+        filename = file.filename or ''
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        ext = os.path.splitext(filename.lower())[1]
+        supported_images = {'.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp'}
+        if ext != '.pdf' and ext not in supported_images:
+            return jsonify({
+                'success': False,
+                'error': 'Only PDF and image files are supported'
+            }), 400
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext or '.ocr') as tmp_file:
+            file.save(tmp_file.name)
+            tmp_path = tmp_file.name
+
+        try:
+            if ext == '.pdf':
+                if ocr_pdf is None or process_ocr_text is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'OCR functionality not available. Install pytesseract and Tesseract-OCR.'
+                    }), 500
+
+                all_text, page_texts = ocr_pdf(tmp_path)
+                result = process_ocr_text(all_text, source_label='PDF file')
+                page_count = len(page_texts)
+            else:
+                if process_image_file is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Image OCR functionality not available. Install pytesseract, Pillow, and Tesseract-OCR.'
+                    }), 500
+
+                result = process_image_file(tmp_path)
+                all_text = result.get('raw_text', '')
+                page_count = result.get('page_count', 1)
+
+            if not all_text or len(str(all_text).strip()) < 50:
+                return jsonify({
+                    'success': False,
+                    'error': 'Could not extract sufficient text from file'
+                }), 400
+
+            if 'error' in result:
+                return jsonify({
+                    'success': True,
+                    'raw_text': all_text,
+                    'page_count': page_count,
+                    'parsed': False,
+                    'message': result.get('error') or 'Text extracted but could not parse as order form'
+                })
+
+            return jsonify({
+                'success': True,
+                'parsed': True,
+                'data': result,
+                'raw_text': all_text,
+                'page_count': page_count
+            })
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'OCR processing error: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # First-run bootstrap: create parent folder/db file and initialize schema if needed.
@@ -4032,4 +3652,5 @@ if __name__ == '__main__':
         serve(app, host=_host, port=_port, threads=4)
     else:
         print(f'Starting development server on http://localhost:{_port} ...')
-        app.run(debug=True, host='127.0.0.1', port=_port)
+        app.run(debug=False, host=_host, port=_port, use_reloader=False)
+
