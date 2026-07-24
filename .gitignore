@@ -27,6 +27,7 @@ instance/
 *.sqlite
 *.sqlite3
 *backup*.db
+backups/
 
 # OS/editor
 .DS_Store
