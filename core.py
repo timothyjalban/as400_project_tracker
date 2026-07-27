@@ -8,6 +8,7 @@ circular import back to app.py (which imports and registers blueprints).
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -23,6 +24,7 @@ from flask import request
 
 import data.config as db_config
 from data import config
+from data.database import ensure_reminders_schema
 
 try:
     from data.vendors import COMMON_VENDORS
