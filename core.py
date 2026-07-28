@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import request
+from flask import request, session
 
 import data.config as db_config
 from data import config
@@ -32,6 +32,27 @@ except Exception:
     COMMON_VENDORS = []
 
 logger = logging.getLogger(__name__)
+
+AUTH_DISABLE_LOGIN = (os.environ.get('ORDER_TRACKER_DISABLE_AUTH', '0') or '0').strip().lower() in ('1', 'true', 'yes', 'on')
+DESKTOP_HELPER_LOCAL_ONLY = (os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY', '1') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _is_local_request() -> bool:
+    remote = (request.remote_addr or '').strip()
+    if remote in ('127.0.0.1', '::1'):
+        return True
+
+    forwarded_for = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    if forwarded_for in ('127.0.0.1', '::1'):
+        return True
+
+    return False
+
+
+def _is_admin() -> bool:
+    if AUTH_DISABLE_LOGIN:
+        return True
+    return session.get('role') == 'admin'
 
 
 def _is_writable_parent(path: Path) -> bool:
