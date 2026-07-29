@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260714-2') }}">
 </head>
 <body>
     <div class="container">
@@ -30,92 +30,91 @@
 
         <!-- Filters Bar -->
         <div class="filters-bar">
-            <div class="filter-group">
-                <label for="searchInput">Search:</label>
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="Name, project, quote/PO, etc."
-                    autocomplete="off"
-                >
+            <div class="toolbar-section toolbar-section-search">
+                <div class="filter-group filter-group-search">
+                    <label for="searchInput">Search</label>
+                    <input
+                        type="text"
+                        id="searchInput"
+                        placeholder="Name, project, quote/PO, etc."
+                        autocomplete="off"
+                    >
+                </div>
+
+                <div class="filter-group filter-group-stage">
+                    <label for="stageFilter">Stage</label>
+                    <select id="stageFilter">
+                        <option value="">(All)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group filter-group-checks">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showCompleted">
+                        <span>Show Completed</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enableMonitoring">
+                        <span>Monitor</span>
+                    </label>
+                </div>
             </div>
 
-            <div class="filter-group">
-                <label for="stageFilter">Stage:</label>
-                <select id="stageFilter">
-                    <option value="">(All)</option>
-                </select>
+            <div class="toolbar-section toolbar-section-primary">
+                <div class="filter-group">
+                    <button id="newOrderBtn" class="btn-new-order">+ New Order</button>
+                </div>
+                <div class="filter-group">
+                    <button id="customerLookupBtn" class="btn-open-order">Customer Lookup</button>
+                </div>
+                <div class="filter-group">
+                    <button id="refreshBtn" class="btn-refresh">Refresh</button>
+                </div>
             </div>
 
-            <div class="filter-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="showCompleted">
-                    <span>Show Completed</span>
-                </label>
+            <div class="toolbar-section toolbar-section-docs">
+                <div class="filter-group">
+                    <button id="exportBtn" class="btn-export">Export CSV</button>
+                </div>
+                <div class="filter-group">
+                    <button id="exportBlankProcessBtn" class="btn-export">Product Intake Sheet</button>
+                </div>
+                <div class="filter-group">
+                    <button id="ocrImportBtn" class="btn-ocr">Bulk Import</button>
+                </div>
             </div>
 
-            <div class="filter-group">
-                <button id="refreshBtn" class="btn-refresh">🔄 Refresh</button>
+            <div class="toolbar-section toolbar-section-backup">
+                <div class="filter-group">
+                    <button id="backupAllBtn" class="btn-backup-all">Backup All</button>
+                </div>
+                <div class="filter-group">
+                    <button id="downloadBackupBtn" class="btn-backup-all">Download Backup JSON</button>
+                </div>
+                <div class="filter-group">
+                    <button id="restoreBackupBtn" class="btn-ocr">Restore Backup JSON</button>
+                    <input type="file" id="restoreBackupInput" accept=".json,application/json" style="display: none;">
+                </div>
+                <div class="filter-group">
+                    <button id="remindersBtn" class="btn-reminders">Reminders</button>
+                </div>
             </div>
 
-            <div class="filter-group">
-                <button id="exportBtn" class="btn-export">📄 Export CSV</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="exportBlankProcessBtn" class="btn-export">🖨️ Product Intake Sheet</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="backupAllBtn" class="btn-backup-all">💾 Backup All</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="downloadBackupBtn" class="btn-backup-all">Download Backup JSON</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="restoreBackupBtn" class="btn-ocr">Restore Backup JSON</button>
-                <input type="file" id="restoreBackupInput" accept=".json,application/json" style="display: none;">
-            </div>
-
-            <div class="filter-group">
-                <button id="remindersBtn" class="btn-reminders">⏰ Reminders</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="ocrImportBtn" class="btn-ocr">� Bulk Import</button>
-            </div>
-
-            <div class="filter-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="enableMonitoring">
-                    <span>🔔 Monitor</span>
-                </label>
-            </div>
-
-            <div class="filter-group">
-                <button id="newOrderBtn" class="btn-new-order">+ New Order</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="customerLookupBtn" class="btn-open-order">👤 Customer Lookup</button>
-            </div>
-
-            <div class="filter-group">
-                <button id="toolbarOpenQuoteBtn" class="btn-open-order" onclick="openQuote()">Open Quote</button>
-            </div>
-            <div class="filter-group">
-                <button id="toolbarOpenInvoiceBtn" class="btn-open-order" onclick="openInvoice()">Open Invoice</button>
-            </div>
-            <div class="filter-group">
-                <button id="toolbarOpenSpecialOrderBtn" class="btn-open-order" onclick="openSpecialOrder()">Open Special Order</button>
-            </div>
-            <div class="filter-group">
-                <button id="toolbarDeleteOrderBtn" class="btn-delete-order" onclick="deleteSelectedOrder()">🗑️ Delete Order</button>
+            <div class="toolbar-section toolbar-section-selected">
+                <div class="filter-group">
+                    <button id="toolbarOpenQuoteBtn" class="btn-open-order" onclick="openQuote()">Open Quote</button>
+                </div>
+                <div class="filter-group">
+                    <button id="toolbarOpenInvoiceBtn" class="btn-open-order" onclick="openInvoice()">Open Invoice</button>
+                </div>
+                <div class="filter-group">
+                    <button id="toolbarOpenSpecialOrderBtn" class="btn-open-order" onclick="openSpecialOrder()">Open Special Order</button>
+                </div>
+                <div class="filter-group">
+                    <button id="toolbarDeleteOrderBtn" class="btn-delete-order" onclick="deleteSelectedOrder()">Delete Order</button>
+                </div>
             </div>
         </div>
-
         <!-- Orders Count -->
         <div class="orders-count">
             <span id="ordersCount">Loading...</span>
@@ -179,18 +178,50 @@
                     <div class="items-type-actions items-top-actions">
                         <button type="button" id="addDoorItemBtn" class="btn btn-primary">+ Door</button>
                         <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
+                        <button type="button" id="addHardwareItemBtn" class="btn btn-secondary">+ Hardware</button>
                     </div>
 
                     <div id="orderItemsContainerCard" class="items-editor-card">
                         <div class="process-editor-header">
                             <h3>Order Items</h3>
                             <div class="items-editor-header-right">
-                                <span class="items-editor-subtitle">Start with Door or Window, then add details</span>
+                                <span class="items-editor-subtitle">Start with Door, Window, or Hardware, then add details</span>
+                                <button type="button" id="as400CommentPrefsBtn" class="items-collapse-btn" title="Choose which fields appear in AS400 comments">⚙ Comment Fields</button>
                                 <button type="button" id="toggleItemsContainerBtn" class="items-collapse-btn" aria-expanded="true">Collapse</button>
                             </div>
                         </div>
                         <div id="orderItemsContainerBody" class="items-editor-body">
+                            <!-- Bulk Set Panel -->
+                            <div id="bulkSetPanel" class="bulk-set-panel" style="display:none;">
+                                <div class="bulk-set-header">
+                                    <span class="bulk-set-title">⚡ Bulk Set Attribute</span>
+                                    <button type="button" id="bulkSetCloseBtn" class="bulk-set-close-btn" title="Close">✕</button>
+                                </div>
+                                <div class="bulk-set-controls">
+                                    <div class="bulk-set-field-group">
+                                        <label for="bulkSetField">Attribute</label>
+                                        <select id="bulkSetField"></select>
+                                    </div>
+                                    <div class="bulk-set-field-group">
+                                        <label for="bulkSetValue">Value</label>
+                                        <div id="bulkSetValueWrapper"></div>
+                                    </div>
+                                    <div class="bulk-set-actions">
+                                        <button type="button" id="bulkSetApplyAll" class="btn btn-primary">Apply to All</button>
+                                        <button type="button" id="bulkSetApplyDoors" class="btn btn-secondary">Doors Only</button>
+                                        <button type="button" id="bulkSetApplyWindows" class="btn btn-secondary">Windows Only</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bulk-set-toggle-row">
+                                <button type="button" id="bulkSetToggleBtn" class="bulk-set-toggle-btn">⚡ Bulk Set</button>
+                            </div>
                             <div id="lineItemsList" class="line-items-list"></div>
+                            <div class="items-type-actions items-bottom-actions">
+                                <button type="button" id="addDoorItemBottomBtn" class="btn btn-primary">+ Door</button>
+                                <button type="button" id="addWindowItemBottomBtn" class="btn btn-secondary">+ Window</button>
+                                <button type="button" id="addHardwareItemBottomBtn" class="btn btn-secondary">+ Hardware</button>
+                            </div>
                         </div>
                     </div>
 
@@ -203,6 +234,8 @@
                                 <button type="button" class="btn btn-primary" onclick="createSpecialOrder()">Special Order</button>
                                 <input type="file" id="processFileInput" multiple style="display: none;" onchange="handleProcessFileSelect(event)">
                                 <button type="button" class="btn btn-secondary" onclick="openProcessFilePicker()">Add Files</button>
+                                <input type="file" id="processQuoteImportInput" accept=".json,.csv,image/*,.pdf" style="display: none;" onchange="handleProcessQuoteImportFile(event)">
+                                <button type="button" class="btn btn-secondary" onclick="openProcessQuoteImportPicker()">Import Quote Into Order</button>
                                 <button type="button" id="processPrevStageBtn" class="btn btn-secondary" onclick="moveSelectedOrderStage(-1)">Previous Stage</button>
                                 <button type="button" id="processNextStageBtn" class="btn btn-secondary" onclick="moveSelectedOrderStage(1)">Next Stage</button>
                                 <div class="process-stage-jump">
@@ -210,7 +243,7 @@
                                     <button type="button" class="btn btn-secondary" onclick="jumpToSelectedStage()">Jump To Stage</button>
                                 </div>
                                 <button type="button" id="processArchiveOrderBtn" class="btn btn-warning" onclick="toggleSelectedOrderArchive()">Archive Order</button>
-                                <button id="saveInlineOrderBtn" class="btn btn-primary">Save Changes</button>
+                                <button type="button" id="saveInlineOrderBtn" class="btn btn-primary">Save Changes</button>
                             </div>
                         </div>
                         <div id="processTimeline" class="process-timeline"></div>
@@ -245,8 +278,15 @@
                         <form id="inlineOrderForm" class="form-grid">
                             <input type="hidden" id="inline_line_items" name="line_items">
                             <input type="hidden" id="inline_additional_quotes" name="additional_quotes">
+                            <input type="hidden" id="inline_additional_invoices" name="additional_invoices">
+                            <input type="hidden" id="inline_additional_pos" name="additional_pos">
                             <input type="hidden" id="inline_customer_profile_id" name="customer_profile_id">
                             <input type="hidden" id="inline_default_project_notes" name="default_project_notes">
+                            <input type="hidden" id="inline_needs_install" name="needs_install">
+                            <input type="hidden" id="inline_install_street" name="install_street">
+                            <input type="hidden" id="inline_install_city" name="install_city">
+                            <input type="hidden" id="inline_install_state" name="install_state">
+                            <input type="hidden" id="inline_install_zip" name="install_zip">
                             <div class="form-group">
                                 <label for="inline_customer_name">Customer Name *</label>
                                 <input type="text" id="inline_customer_name" name="customer_name" required>
@@ -670,6 +710,15 @@
                                             <option value='2-3/8"'>2-3/8"</option>
                                             <option value='2-3/4"'>2-3/4"</option>
                                         </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="prefit_bore_diameter">Bore Diameter</label>
+                                        <input type="text" id="prefit_bore_diameter" name="prefit_bore_diameter" list="prefit_bore_diameter_options" value='2 1/8"'>
+                                        <datalist id="prefit_bore_diameter_options">
+                                            <option value='2 1/8"'></option>
+                                            <option value='1 1/2"'></option>
+                                            <option value='1 5/8"'></option>
+                                        </datalist>
                                     </div>
                                     <div class="form-group">
                                         <label for="prefit_swing">Door Swing</label>
@@ -1122,19 +1171,19 @@
     <div id="ocrModal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h2>📦 Bulk Import</h2>
+                <h2 id="ocrModalTitle">Bulk Import</h2>
                 <button class="modal-close" onclick="closeOCRModal()">&times;</button>
             </div>
             
             <div class="modal-body">
-                <p style="color: var(--text-secondary); margin-bottom: var(--padding-medium);">
+                <p id="ocrModalIntro" style="color: var(--text-secondary); margin-bottom: var(--padding-medium);">
                     Upload a JSON bulk import file to import multiple orders at once. Duplicate detection automatically prevents re-importing existing orders.
                 </p>
                 
                 <div class="form-section">
                     <h3>Upload File</h3>
                     <div style="display: flex; flex-direction: column; gap: var(--padding-medium);">
-                        <input type="file" id="ocrFileInput" accept=".json,image/*,.pdf" style="display: none;" onchange="handleOCRFile(event)">
+                        <input type="file" id="ocrFileInput" accept=".json,.csv,image/*,.pdf" multiple style="display: none;" onchange="handleOCRFile(event)">
                         <button type="button" class="btn btn-primary" onclick="document.getElementById('ocrFileInput').click()">
                             📁 Choose File
                         </button>
@@ -1148,6 +1197,35 @@
                             <div style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 8px;">Processing...</div>
                             <div style="background-color: var(--card-bg); border-radius: var(--radius-small); overflow: hidden;">
                                 <div id="ocrProgressBar" style="background-color: var(--primary); height: 4px; width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+
+                        <div id="ocrPreviewPanel" style="display: none; border: 1px solid var(--border); border-radius: var(--radius-small); padding: var(--padding-small); background: var(--surface-elevated); gap: 10px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                <strong>OCR Extraction Preview</strong>
+                                <span id="ocrPreviewSummary" style="font-size: var(--font-size-sm); color: var(--text-muted);"></span>
+                            </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px;">
+                                <label for="ocrRawExtract" style="font-size: var(--font-size-sm);">Raw OCR Text</label>
+                                <button type="button" class="btn btn-secondary" style="padding: 4px 10px;" onclick="copyOCRPreviewText('raw')">Copy Raw Text</button>
+                            </div>
+                            <textarea id="ocrRawExtract" readonly style="width: 100%; min-height: 140px; resize: vertical;"></textarea>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px;">
+                                <label for="ocrParsedExtract" style="font-size: var(--font-size-sm);">Parsed Order JSON</label>
+                                <button type="button" class="btn btn-secondary" style="padding: 4px 10px;" onclick="copyOCRPreviewText('parsed')">Copy Parsed JSON</button>
+                            </div>
+                            <textarea id="ocrParsedExtract" readonly style="width: 100%; min-height: 140px; resize: vertical;"></textarea>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px;">
+                                <label for="ocrKeyFieldsExtract" style="font-size: var(--font-size-sm);">Key Fields</label>
+                                <button type="button" class="btn btn-secondary" style="padding: 4px 10px;" onclick="copyOCRPreviewText('key-fields')">Copy Key Fields</button>
+                            </div>
+                            <textarea id="ocrKeyFieldsExtract" readonly style="width: 100%; min-height: 120px; resize: vertical;"></textarea>
+
+                            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                                <button type="button" id="ocrImportParsedBtn" class="btn btn-primary" onclick="importPreviewedOCROrders()">Import Parsed Orders</button>
                             </div>
                         </div>
                     </div>
@@ -1164,7 +1242,7 @@
                 </div>
                 
                 <div class="form-section" style="background-color: var(--card-bg); padding: var(--padding-medium); border-radius: var(--radius-small); border: 1px dashed var(--border);">
-                    <strong>Note:</strong> Full OCR functionality requires server-side processing. This feature is a placeholder for future implementation.
+                    <strong>Note:</strong> OCR processing is active and runs on the server. For PDF/image extraction to work, ensure Tesseract and OCR dependencies are installed on the machine running the web app.
                 </div>
             </div>
 
@@ -1174,10 +1252,56 @@
         </div>
     </div>
 
+    <!-- AS400 Comment Field Preferences Modal -->
+    <div id="as400CommentPrefsModal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2>AS400 Comment Fields</h2>
+                <button class="modal-close" onclick="closeAs400CommentPrefsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: var(--padding-medium);">
+                    Choose which fields are included in the AS400 comment preview and automation text for Door and Window line items.
+                </p>
+                <div id="as400CommentPrefsFieldList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="resetAs400CommentPrefsToDefault()">Reset to Default</button>
+                <button type="button" class="btn btn-primary" onclick="saveAs400CommentPrefsModal()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <button id="backToTopBtn" class="back-to-top-btn" type="button" title="Back to beginning stage">
         ↑ Top
     </button>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260723-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-items.js', v='20260717-3') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-catalog.js', v='20260717-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260716-3') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-as400.js', v='20260722-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/attachments.js', v='20260630-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/notes.js', v='20260630-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/reminders.js', v='20260729-1') }}"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

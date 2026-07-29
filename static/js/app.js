@@ -28,8 +28,6 @@ const STAGES = [
     "CLOSED",
 ];
 
-const PROCESS_STAGES = STAGES;
-
 // Contacts for autocomplete
 let knownContacts = [];
 let autocompleteDropdown = null;
@@ -82,6 +80,10 @@ const floatingStageJumpBar = document.getElementById('floatingStageJumpBar');
 const floatingStageJumpTrack = document.getElementById('floatingStageJumpTrack');
 const addDoorItemBtn = document.getElementById('addDoorItemBtn');
 const addWindowItemBtn = document.getElementById('addWindowItemBtn');
+const addHardwareItemBtn = document.getElementById('addHardwareItemBtn');
+const addDoorItemBottomBtn = document.getElementById('addDoorItemBottomBtn');
+const addWindowItemBottomBtn = document.getElementById('addWindowItemBottomBtn');
+const addHardwareItemBottomBtn = document.getElementById('addHardwareItemBottomBtn');
 const lineItemsList = document.getElementById('lineItemsList');
 const orderItemsContainerCard = document.getElementById('orderItemsContainerCard');
 const toggleItemsContainerBtn = document.getElementById('toggleItemsContainerBtn');
@@ -93,39 +95,73 @@ let openProcessStages = new Set();
 let pendingConfirmResolve = null;
 let currentLineItems = [];
 let currentAdditionalQuotes = [];
+let currentAdditionalInvoices = [];
+let currentAdditionalPurchaseOrders = [];
+let lastSavedLineItemsJson = null;
+let lineItemsDirty = false;
 let customerLookupDebounce = null;
 let currentLookupCustomers = [];
 let currentCustomerProfile = null;
 const WINDOW_HANDING_STORAGE_KEY = 'order_tracker_window_handing_options';
 const DEFAULT_WINDOW_HANDING_OPTIONS = ['XO', 'OX', 'XOX'];
+const JAMB_SIZE_STORAGE_KEY = 'order_tracker_jamb_size_options';
+const DEFAULT_JAMB_SIZE_OPTIONS = ['4 9/16', '6 9/16'];
+const DOOR_LOCATION_STORAGE_KEY = 'doorlocationoptions';
+const DEFAULT_DOOR_LOCATION_OPTIONS = ['Interior', 'Exterior'];
 const DEFAULT_ITEM_STYLE_OPTIONS = {
-    door: ['Slab', 'Prehung', 'French', 'Patio'],
-    window: ['Single Hung', 'Double Hung', 'Casement', 'Sliding', 'Picture']
+    door: [
+        'Slab', 
+        'Prehung', 
+        'French', 
+        'Pio',
+    ],
+    window: ['Single Hung', 'Double Hung', 'Casement', 'Sliding', 'Picture', 'Gable'],
+    hardware: ['Handleset', 'Entry Set', 'Deadbolt', 'Passage', 'Privacy', 'Dummy']
 };
 const DEFAULT_ITEM_VENDOR_OPTIONS = {
     door: ['Jeld-Wen', 'Masonite', 'Therma-Tru'],
-    window: ['Milgard', 'Andersen', 'Pella']
+    window: ['Milgard', 'Andersen', 'Pella'],
+    hardware: ['Emtek']
 };
 const DEFAULT_FIN_TYPE_OPTIONS = ['1" Setback'];
+const DEFAULT_WINDOW_COLOR_OPTIONS = [];
+
 const FIN_TYPE_ALIASES = {
     '1': '1" Setback',
-    '1 setback': '1" Setback'
+    '1 setback': '1" Setback',
+    '1 3/8': '1 3/8" Setback',
+    '1 3/8 setback': '1 3/8" Setback'
 };
+
+
+const FIN_TYPE_DISPLAY = {
+    '1" Setback': '1" SB',
+    '1 3/8" Setback': '1 3/8" SB'
+};
+
+
 let itemStyleOptions = {
     door: [...DEFAULT_ITEM_STYLE_OPTIONS.door],
-    window: [...DEFAULT_ITEM_STYLE_OPTIONS.window]
+    window: [...DEFAULT_ITEM_STYLE_OPTIONS.window],
+    hardware: [...DEFAULT_ITEM_STYLE_OPTIONS.hardware]
 };
 let itemVendorOptions = {
     door: [...DEFAULT_ITEM_VENDOR_OPTIONS.door],
-    window: [...DEFAULT_ITEM_VENDOR_OPTIONS.window]
+    window: [...DEFAULT_ITEM_VENDOR_OPTIONS.window],
+    hardware: [...DEFAULT_ITEM_VENDOR_OPTIONS.hardware]
 };
 let vendorSeriesOptions = {
     door: {},
-    window: {}
+    window: {},
+    hardware: {}
 };
 let finTypeOptions = [...DEFAULT_FIN_TYPE_OPTIONS];
+let windowColorOptions = [...DEFAULT_WINDOW_COLOR_OPTIONS];
 let vendorSkuByName = {};
 let windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
+let jambSizeOptions = [...DEFAULT_JAMB_SIZE_OPTIONS];
+let doorLocationOptions = ['Interior', 'Exterior'];
+
 const HIGH_CONTRAST_STORAGE_KEY = 'order_tracker_high_contrast_enabled';
 const ORDER_ITEMS_COLLAPSED_STORAGE_KEY = 'order_tracker_items_container_collapsed';
 
@@ -151,6 +187,69 @@ function initializeOrderItemsContainerCollapse() {
     }
 }
 
+const AS400_COMMENT_PREF_FIELD_LABELS = {
+    room: 'Room / Location',
+    vendor: 'Vendor',
+    series: 'Series / Model',
+    style: 'Style',
+    material: 'Material',
+    finType: 'Frame / Fin Type (windows)',
+    color: 'Color',
+    glass: 'Glass',
+    argon: 'Argon',
+    temperedGlass: 'Tempered Glass',
+    handing: 'Handing / Operation',
+    jamb: 'Jamb Size (doors)',
+    swing: 'Swing (doors)',
+    notes: 'Notes'
+};
+
+function initializeAs400CommentPrefsButton() {
+    const btn = document.getElementById('as400CommentPrefsBtn');
+    if (btn) {
+        btn.addEventListener('click', openAs400CommentPrefsModal);
+    }
+}
+
+function openAs400CommentPrefsModal() {
+    const modal = document.getElementById('as400CommentPrefsModal');
+    const listEl = document.getElementById('as400CommentPrefsFieldList');
+    if (!modal || !listEl) return;
+
+    const prefs = getAs400CommentFieldPrefs();
+    listEl.innerHTML = Object.keys(AS400_COMMENT_PREF_FIELD_LABELS).map(key => `
+        <label style="display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm);">
+            <input type="checkbox" data-as400-comment-pref="${key}" ${prefs[key] ? 'checked' : ''}>
+            ${AS400_COMMENT_PREF_FIELD_LABELS[key]}
+        </label>
+    `).join('');
+    modal.style.display = 'block';
+}
+
+function closeAs400CommentPrefsModal() {
+    const modal = document.getElementById('as400CommentPrefsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function saveAs400CommentPrefsModal() {
+    const listEl = document.getElementById('as400CommentPrefsFieldList');
+    if (!listEl) return;
+
+    const prefs = {};
+    listEl.querySelectorAll('[data-as400-comment-pref]').forEach(input => {
+        prefs[input.getAttribute('data-as400-comment-pref')] = input.checked;
+    });
+    setAs400CommentFieldPrefs(prefs);
+    refreshAllAs400CommentPreviews();
+    closeAs400CommentPrefsModal();
+}
+
+function resetAs400CommentPrefsToDefault() {
+    setAs400CommentFieldPrefs(DEFAULT_AS400_COMMENT_FIELD_PREFS);
+    refreshAllAs400CommentPreviews();
+    openAs400CommentPrefsModal();
+}
+
 function setHighContrastMode(enabled) {
     const isEnabled = Boolean(enabled);
     document.body.classList.toggle('high-contrast', isEnabled);
@@ -174,65 +273,6 @@ function initializeHighContrastToggle() {
             showToast(nextEnabled ? 'High contrast enabled' : 'High contrast disabled');
         });
     }
-}
-
-function loadWindowHandingOptions() {
-    try {
-        const stored = window.localStorage.getItem(WINDOW_HANDING_STORAGE_KEY);
-        if (!stored) {
-            windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
-            return;
-        }
-
-        const parsed = JSON.parse(stored);
-        if (!Array.isArray(parsed)) {
-            windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
-            return;
-        }
-
-        const merged = [...DEFAULT_WINDOW_HANDING_OPTIONS, ...parsed]
-            .map(option => String(option || '').trim().toUpperCase())
-            .filter(Boolean);
-        windowHandingOptions = Array.from(new Set(merged));
-    } catch (error) {
-        console.warn('Unable to load window handing options, using defaults.', error);
-        windowHandingOptions = [...DEFAULT_WINDOW_HANDING_OPTIONS];
-    }
-}
-
-function saveWindowHandingOptions() {
-    try {
-        window.localStorage.setItem(WINDOW_HANDING_STORAGE_KEY, JSON.stringify(windowHandingOptions));
-    } catch (error) {
-        console.warn('Unable to persist window handing options.', error);
-    }
-}
-
-function getWindowHandingOptions() {
-    return Array.isArray(windowHandingOptions) && windowHandingOptions.length > 0
-        ? windowHandingOptions
-        : [...DEFAULT_WINDOW_HANDING_OPTIONS];
-}
-
-function addWindowHandingOption() {
-    const handingName = prompt('Add a new window handing (e.g., XO):');
-    if (handingName === null) return;
-
-    const trimmed = handingName.trim().toUpperCase();
-    if (!trimmed) {
-        showError('Handing cannot be empty');
-        return;
-    }
-
-    if (getWindowHandingOptions().includes(trimmed)) {
-        showToast(`${trimmed} already exists`);
-        return;
-    }
-
-    windowHandingOptions = [...getWindowHandingOptions(), trimmed];
-    saveWindowHandingOptions();
-    renderLineItemsEditor();
-    showToast(`${trimmed} added to handings`);
 }
 
 const INLINE_ORDER_FIELDS = {
@@ -262,6 +302,8 @@ const INLINE_ORDER_FIELDS = {
     product_type: 'inline_product_type',
     line_items: 'inline_line_items',
     additional_quotes: 'inline_additional_quotes',
+    additional_invoices: 'inline_additional_invoices',
+    additional_pos: 'inline_additional_pos',
     po_numbers: 'inline_po_numbers',
     po_date_signed: 'inline_po_date_signed',
     vendor_ack_number: 'inline_vendor_ack_number',
@@ -270,7 +312,7 @@ const INLINE_ORDER_FIELDS = {
 };
 
 const STAGE_SMART_FIELD_MAP = {
-    ORDER_DETAILS: ['customer_name', 'customer_phone', 'customer_email', 'project_name', 'stage', 'priority_manual'],
+    ORDER_DETAILS: ['customer_name', 'customer_phone', 'customer_email', 'customer_number', 'project_name', 'stage', 'priority_manual'],
     QUOTE_CREATED: ['quote_number', 'quote_date', 'quote_total', 'quote_done'],
     QUOTE_SIGNOFF_RECEIVED: ['signoff_done'],
     INVOICE_CREATED: ['invoice_number', 'invoice_date', 'invoice_total', 'invoice_done'],
@@ -291,6 +333,56 @@ const STAGE_SMART_FIELD_MAP = {
 // Autosave state
 let autosaveTimeout = null;
 const AUTOSAVE_DELAY = 1500; // 1.5 seconds
+let lineItemsAutosaveTimeout = null;
+const LINE_ITEMS_AUTOSAVE_DELAY = 2500;
+
+// Request sequence counter — discard stale loadOrders responses.
+let loadOrdersSequence = 0;
+const PREFIT_COMMENT_MAX_LINES = 6;
+const PREFIT_COMMENT_MAX_CHARS_PER_LINE = 30;
+function getLineItemsJsonForSave() {
+    return currentLineItems.length > 0 ? JSON.stringify(currentLineItems) : null;
+}
+
+function markLineItemsDirty() {
+    lineItemsDirty = true;
+}
+
+function resetLineItemsDirty(savedJson = undefined) {
+    lastSavedLineItemsJson = savedJson === undefined ? getLineItemsJsonForSave() : savedJson;
+    lineItemsDirty = false;
+}
+
+function getChangedLineItemsJson() {
+    const nextJson = getLineItemsJsonForSave();
+    if (!lineItemsDirty && nextJson === lastSavedLineItemsJson) {
+        return undefined;
+    }
+    return nextJson;
+}
+
+function applyUpdatedOrderLocally(order) {
+    if (!order || !order.id) return;
+
+    const existingIndex = allOrders.findIndex(item => item.id === order.id);
+    if (existingIndex >= 0) {
+        allOrders = sortOrdersForList(allOrders.map(item => item.id === order.id ? order : item));
+    } else {
+        allOrders = sortOrdersForList([...allOrders, order]);
+    }
+
+    if (selectedOrderId === order.id || (currentOrder && currentOrder.id === order.id)) {
+        selectedOrderId = order.id;
+        currentOrder = order;
+    }
+}
+
+function refreshOrderListAndProcess() {
+    const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
+    renderOrdersTable(activeOrders);
+    renderCompletedOrders(completedOrders);
+    renderSalesProcess(getSelectedOrder());
+}
 
 // Stage done checkbox mapping (checkbox_id -> timestamp_field)
 const STAGE_DONE_FIELDS = {
@@ -313,6 +405,14 @@ const STAGE_DONE_FIELDS = {
     'install_quote_done': 'install_quote_done_at',
     'install_approved_done': 'install_approved_done_at'
 };
+
+const STAGE_NUMERIC_FIELDS = new Set([
+    'quote_total',
+    'quote_total_2',
+    'invoice_total',
+    'vendor_ack_total',
+    'priority_manual',
+]);
 
 const OPTIONAL_STAGE_FIELDS = new Set([
     'vendor_ack_total'
@@ -412,43 +512,41 @@ function syncPriorityInputWithStage(stageElement, priorityElement, previousStage
     priorityElement.dataset.autoPriorityStage = nextStage || '';
 }
 
+function runStartupStep(label, fn) {
+    try {
+        const result = fn();
+        if (result && typeof result.catch === 'function') {
+            result.catch(error => console.error(`Startup step failed: ${label}`, error));
+        }
+    } catch (error) {
+        console.error(`Startup step failed: ${label}`, error);
+    }
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    initializeHighContrastToggle();
-    initializeOrderItemsContainerCollapse();
+    // Load the order list first so optional panels cannot block the main workflow.
+    runStartupStep('load orders', () => loadOrders());
 
-    // Load stages for filter dropdown
-    loadStages();
-
-    // Load persistent Door/Window style options
-    loadItemStyleOptions();
-
-    // Load persistent Door/Window vendor options
-    loadItemVendorOptions();
-
-    // Load vendor-specific series options for line items
-    loadVendorSeriesOptions();
-
-    // Load global fin type options for line items
-    loadFinTypeOptions();
-
-    // Load vendor SKU catalog from desktop project data
-    loadVendorCatalog();
-
-    // Load local window handing options.
-    loadWindowHandingOptions();
-    
-    // Load contacts for autocomplete
-    loadContacts();
-    
-    // Initialize browser notifications
-    initializeNotifications();
-    
-    // Start checking for due reminders
-    startReminderChecking();
-    
-    // Load initial orders
-    loadOrders();
+    runStartupStep('high contrast toggle', initializeHighContrastToggle);
+    runStartupStep('order items collapse', initializeOrderItemsContainerCollapse);
+    runStartupStep('as400 comment prefs button', initializeAs400CommentPrefsButton);
+    runStartupStep('stage tab loop', bindStageTabLoop);
+    runStartupStep('bulk set panel', initBulkSetPanel);
+    runStartupStep('load stages', loadStages);
+    runStartupStep('load item style options', loadItemStyleOptions);
+    runStartupStep('load item vendor options', loadItemVendorOptions);
+    runStartupStep('load vendor series options', loadVendorSeriesOptions);
+    runStartupStep('load fin type options', loadFinTypeOptions);
+    runStartupStep('load window color options', loadWindowColorOptions);
+    runStartupStep('load vendor catalog', loadVendorCatalog);
+    runStartupStep('load window handing options', loadWindowHandingOptions);
+    runStartupStep('load hardware lever/knob styles', loadHardwareLeverKnobStyleOptions);
+    runStartupStep('load hardware product codes', loadHardwareProductCodeOptions);
+    runStartupStep('load jamb size options', loadJambSizeOptions);
+    runStartupStep('load contacts', loadContacts);
+    runStartupStep('initialize notifications', initializeNotifications);
+    runStartupStep('start reminder checking', startReminderChecking);
     
     // Set up event listeners
     searchInput.addEventListener('input', debounce(() => {
@@ -467,13 +565,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 300));
     }
 
-    if (addDoorItemBtn) {
-        addDoorItemBtn.addEventListener('click', () => addLineItem('door'));
-    }
+    [addDoorItemBtn, addDoorItemBottomBtn].filter(Boolean).forEach(button => {
+        button.addEventListener('click', () => addLineItem('door'));
+    });
 
-    if (addWindowItemBtn) {
-        addWindowItemBtn.addEventListener('click', () => addLineItem('window'));
-    }
+    [addWindowItemBtn, addWindowItemBottomBtn].filter(Boolean).forEach(button => {
+        button.addEventListener('click', () => addLineItem('window'));
+    });
+
+    [addHardwareItemBtn, addHardwareItemBottomBtn].filter(Boolean).forEach(button => {
+        button.addEventListener('click', () => addLineItem('hardware'));
+    });
 
     stageFilter.addEventListener('change', loadOrders);
     showCompletedCheckbox.addEventListener('change', loadOrders);
@@ -535,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
             syncPriorityInputWithStage(inlineStage, inlinePriority);
 
             const stageValue = inlineStage.value;
-            if (stageValue && PROCESS_STAGES.includes(stageValue)) {
+            if (stageValue && STAGES.includes(stageValue)) {
                 openProcessStages = new Set([stageValue]);
             } else {
                 openProcessStages = new Set();
@@ -543,12 +645,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSalesProcess(getSelectedOrder());
         });
     }
-    
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.repeat) return;
 
-        // Escape key closes modal
         if (e.key === 'Escape' && customerHistoryModal && customerHistoryModal.style.display === 'block') {
             closeCustomerHistoryModal();
             return;
@@ -564,14 +664,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (e.key === 'Escape' && orderModal.style.display === 'block') {
+        if (e.key === 'Escape' && orderModal && orderModal.style.display === 'block') {
             closeOrderModal();
             return;
         }
 
-        const isSaveShortcut = (e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's';
+        const isSaveShortcut = (e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's';
         if (isSaveShortcut) {
             e.preventDefault();
+            flushActiveEditsBeforeSave();
 
             if (orderModal && orderModal.style.display === 'block') {
                 saveOrder();
@@ -584,31 +685,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const canStageJump = Boolean(selectedOrderId);
         const isNextStageShortcut =
-            (e.altKey && e.key === '.') ||
+            (e.altKey && (e.key === '.' || e.key === 'ArrowRight')) ||
             ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'ArrowRight');
         const isPrevStageShortcut =
-            (e.altKey && e.key === ',') ||
+            (e.altKey && (e.key === ',' || e.key === 'ArrowLeft')) ||
             ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'ArrowLeft');
 
-        if (!canStageJump) {
+        if (!isNextStageShortcut && !isPrevStageShortcut) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!selectedOrderId) {
+            showError('Select an order first');
             return;
         }
 
-        if (isNextStageShortcut) {
-            e.preventDefault();
-            moveSelectedOrderStage(1);
-            return;
-        }
-
-        if (isPrevStageShortcut) {
-            e.preventDefault();
-            moveSelectedOrderStage(-1);
-            return;
-        }
-
-    });
+        moveSelectedOrderStage(isNextStageShortcut ? 1 : -1);
+    }, true);
 
     window.addEventListener('scroll', updateBackToTopVisibility);
     updateBackToTopVisibility();
@@ -633,887 +728,248 @@ function isTypingIntoForm(target) {
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable;
 }
 
-function createLineItemTemplate(type) {
-    return {
-        type,
-        product: type === 'window' ? 'Window' : 'Door',
-        quantity: 1,
-        price: '',
-        operation: '',
-        vendor: '',
-        vendor_sku: '',
-        room: '',
-        series: '',
-        fin_type: '',
-        argon_included: '',
-        style: '',
-        material: '',
-        swing: '',
-        frame: '',
-        glass: '',
-        width: '',
-        height: '',
-        notes: '',
-        ui_collapsed: false
-    };
+function commitActiveLineItemControl() {
+    const active = document.activeElement;
+    if (!active || !active.getAttribute) return;
+
+    const indexAttr = active.getAttribute('data-item-index');
+    const field = active.getAttribute('data-item-field');
+    if (indexAttr === null || !field) return;
+
+    const index = parseInt(indexAttr, 10);
+    if (!Number.isFinite(index)) return;
+
+    const value = field === 'quantity'
+        ? parseInt(active.value || '1', 10)
+        : (active.type === 'checkbox' ? active.checked : active.value);
+
+    if (active.tagName === 'SELECT' && isAddNewLineItemOption(field, value)) return;
+
+    updateLineItem(index, field, value, { suppressRender: true, autosave: false });
 }
 
-function normalizeFinTypeValue(value) {
-    const clean = String(value || '').trim();
-    if (!clean) return '';
-    return FIN_TYPE_ALIASES[clean.toLowerCase()] || clean;
-}
-
-function normalizeLineItem(rawItem) {
-    const item = { ...createLineItemTemplate('door'), ...(rawItem || {}) };
-    const detectedType = String(item.type || item.product || '').toLowerCase().includes('window') ? 'window' : 'door';
-    item.type = detectedType;
-    item.product = detectedType === 'window' ? 'Window' : 'Door';
-    item.quantity = item.quantity || 1;
-    if (!item.operation && rawItem?.operation_style) {
-        item.operation = rawItem.operation_style;
-    }
-    if (!item.vendor_sku && item.vendor) {
-        item.vendor_sku = getVendorSkuForName(item.vendor) || '';
-    }
-    if (!item.price && (rawItem?.unit_price || rawItem?.quote_total)) {
-        item.price = rawItem.unit_price || rawItem.quote_total || '';
-    }
-    if (!item.argon_included && rawItem?.argon !== undefined && rawItem?.argon !== null) {
-        item.argon_included = String(rawItem.argon).trim();
-    }
-    item.fin_type = normalizeFinTypeValue(item.fin_type);
-    item.ui_collapsed = Boolean(rawItem?.ui_collapsed ?? rawItem?.collapsed ?? false);
-    return item;
-}
-
-function loadLineItemsFromOrder(order) {
-    let parsed = [];
-    try {
-        if (Array.isArray(order?.line_items)) {
-            parsed = order.line_items;
-        } else if (order?.line_items) {
-            parsed = JSON.parse(order.line_items);
-        }
-    } catch (error) {
-        console.warn('Unable to parse line_items for order', order?.id, error);
-        parsed = [];
-    }
-
-    currentLineItems = Array.isArray(parsed) ? parsed.map(normalizeLineItem) : [];
-    renderLineItemsEditor();
-    syncLineItemsToHiddenField();
-}
-
-function syncLineItemsToHiddenField() {
-    const lineItemsField = document.getElementById(INLINE_ORDER_FIELDS.line_items);
-    if (!lineItemsField) return;
-    lineItemsField.value = currentLineItems.length > 0 ? JSON.stringify(currentLineItems) : '';
-}
-
-function addLineItem(type) {
-    currentLineItems.push(createLineItemTemplate(type));
-    renderLineItemsEditor();
-    syncLineItemsToHiddenField();
-}
-
-function updateLineItem(index, field, value) {
-    if (!currentLineItems[index]) return;
-    const normalizedValue = field === 'fin_type' ? normalizeFinTypeValue(value) : value;
-    currentLineItems[index][field] = normalizedValue;
-    if (field === 'type') {
-        currentLineItems[index].product = normalizedValue === 'window' ? 'Window' : 'Door';
-    } else if (field === 'vendor') {
-        currentLineItems[index].vendor_sku = getVendorSkuForName(normalizedValue) || '';
-    }
-    syncLineItemsToHiddenField();
-}
-
-function removeLineItem(index) {
-    currentLineItems.splice(index, 1);
-    renderLineItemsEditor();
-    syncLineItemsToHiddenField();
-}
-
-function moveLineItem(index, direction) {
-    const fromIndex = Number.isInteger(index) ? index : parseInt(index, 10);
-    const moveDirection = Number.isInteger(direction) ? direction : parseInt(direction, 10);
-
-    if (!Number.isInteger(fromIndex) || !Number.isInteger(moveDirection)) return;
-    if (!currentLineItems[fromIndex]) return;
-
-    const toIndex = fromIndex + moveDirection;
-    if (toIndex < 0 || toIndex >= currentLineItems.length) return;
-
-    const [movedItem] = currentLineItems.splice(fromIndex, 1);
-    currentLineItems.splice(toIndex, 0, movedItem);
-    renderLineItemsEditor();
-    syncLineItemsToHiddenField();
-}
-
-function getNextRoomLocationValue(value) {
-    const raw = String(value ?? '');
-    const trimmed = raw.trim();
-
-    if (!trimmed) {
-        return raw;
-    }
-
-    const incrementNumber = (numberText) => {
-        const width = numberText.length;
-        const nextNumber = Number.parseInt(numberText, 10) + 1;
-        return String(nextNumber).padStart(width, '0');
-    };
-
-    const incrementLetterSequence = (text) => {
-        if (!/^[A-Za-z]+$/.test(text)) return text;
-
-        const isUpper = text === text.toUpperCase();
-        const chars = text.toUpperCase().split('');
-
-        for (let i = chars.length - 1; i >= 0; i -= 1) {
-            if (chars[i] !== 'Z') {
-                chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
-                for (let j = i + 1; j < chars.length; j += 1) {
-                    chars[j] = 'A';
-                }
-                const out = chars.join('');
-                return isUpper ? out : out.toLowerCase();
-            }
-        }
-
-        const expanded = `A${'A'.repeat(chars.length)}`;
-        return isUpper ? expanded : expanded.toLowerCase();
-    };
-
-    if (/^\d+$/.test(trimmed)) {
-        return incrementNumber(trimmed);
-    }
-
-    if (/^[A-Za-z]$/.test(trimmed)) {
-        return incrementLetterSequence(trimmed);
-    }
-
-    // Support suffixed identifiers like "Window-121" or "Bedroom A".
-    const suffixNumberMatch = trimmed.match(/^(.*[\s\-_#])(\d+)$/);
-    if (suffixNumberMatch) {
-        const [, prefix, numberText] = suffixNumberMatch;
-        return `${prefix}${incrementNumber(numberText)}`;
-    }
-
-    const suffixLetterMatch = trimmed.match(/^(.*[\s\-_#])([A-Za-z]+)$/);
-    if (suffixLetterMatch) {
-        const [, prefix, letterText] = suffixLetterMatch;
-        return `${prefix}${incrementLetterSequence(letterText)}`;
-    }
-
-    return raw;
-}
-
-function copyLineItem(index) {
-    const sourceItem = currentLineItems[index];
-    if (!sourceItem) return;
-
-    // Duplicate item details for quick repeated entries.
-    const copiedItem = { ...sourceItem };
-    copiedItem.room = getNextRoomLocationValue(sourceItem.room);
-    currentLineItems.push(copiedItem);
-    renderLineItemsEditor();
-    syncLineItemsToHiddenField();
-}
-
-function toggleLineItemCollapse(index) {
-    if (!currentLineItems[index]) return;
-    currentLineItems[index].ui_collapsed = !Boolean(currentLineItems[index].ui_collapsed);
-    syncLineItemsToHiddenField();
-    persistLineItemsStateSilently();
-    renderLineItemsEditor();
-}
-
-async function persistLineItemsStateSilently() {
-    if (!selectedOrderId) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/orders/${selectedOrderId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                line_items: currentLineItems.length > 0 ? JSON.stringify(currentLineItems) : null
-            })
-        });
-
-        const result = await response.json();
-        if (!result.success || !result.order) {
-            return;
-        }
-
-        allOrders = allOrders.map(item => item.id === result.order.id ? result.order : item);
-        if (currentOrder && currentOrder.id === result.order.id) {
-            currentOrder = result.order;
-        }
-    } catch (error) {
-        console.error('Silent line item state save failed:', error);
-    }
-}
-
-function getStyleOptionsForType(itemType) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const configured = itemStyleOptions?.[normalizedType];
-    if (Array.isArray(configured) && configured.length > 0) {
-        return configured;
-    }
-    return DEFAULT_ITEM_STYLE_OPTIONS[normalizedType];
-}
-
-async function loadItemStyleOptions() {
-    try {
-        const response = await fetch(`${API_BASE}/item-style-options`);
-        const data = await response.json();
-        if (!data.success) return;
-
-        itemStyleOptions = {
-            door: Array.isArray(data.styles?.door) ? data.styles.door : [...DEFAULT_ITEM_STYLE_OPTIONS.door],
-            window: Array.isArray(data.styles?.window) ? data.styles.window : [...DEFAULT_ITEM_STYLE_OPTIONS.window]
-        };
-
-        if (currentLineItems.length > 0) {
-            renderLineItemsEditor();
-        }
-    } catch (error) {
-        console.warn('Unable to load item style options, using defaults.', error);
-    }
-}
-
-function getVendorOptionsForType(itemType) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const configured = itemVendorOptions?.[normalizedType];
-    if (Array.isArray(configured) && configured.length > 0) {
-        return configured;
-    }
-    return DEFAULT_ITEM_VENDOR_OPTIONS[normalizedType];
-}
-
-function normalizeVendorSeriesMap(input) {
-    const normalized = { door: {}, window: {} };
-    if (!input || typeof input !== 'object') {
-        return normalized;
-    }
-
-    for (const itemType of ['door', 'window']) {
-        const byVendor = input[itemType];
-        if (!byVendor || typeof byVendor !== 'object') {
-            continue;
-        }
-
-        for (const [vendorName, seriesList] of Object.entries(byVendor)) {
-            const cleanVendor = String(vendorName || '').trim();
-            if (!cleanVendor) continue;
-            const cleanSeries = Array.isArray(seriesList)
-                ? seriesList.map(name => String(name || '').trim()).filter(Boolean)
-                : [];
-            normalized[itemType][cleanVendor] = Array.from(new Set(cleanSeries)).sort((a, b) => a.localeCompare(b));
-        }
-    }
-
-    return normalized;
-}
-
-function getSeriesOptionsForItemVendor(itemType, vendorName) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const cleanVendor = String(vendorName || '').trim();
-    if (!cleanVendor) return [];
-
-    const searchTypes = [normalizedType, normalizedType === 'window' ? 'door' : 'window'];
-
-    for (const typeKey of searchTypes) {
-        const byVendor = vendorSeriesOptions?.[typeKey] || {};
-        const direct = byVendor[cleanVendor];
-        if (Array.isArray(direct) && direct.length > 0) {
-            return direct;
-        }
-
-        const fallbackKey = Object.keys(byVendor).find(name => name.toLowerCase() === cleanVendor.toLowerCase());
-        if (fallbackKey && Array.isArray(byVendor[fallbackKey]) && byVendor[fallbackKey].length > 0) {
-            return byVendor[fallbackKey];
-        }
-    }
-
-    return [];
-}
-
-function getFinTypeOptions() {
-    const options = Array.isArray(finTypeOptions) && finTypeOptions.length > 0
-        ? finTypeOptions
-        : DEFAULT_FIN_TYPE_OPTIONS;
-    return Array.from(new Set(options.map(name => normalizeFinTypeValue(name)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-}
-
-function normalizeVendorKey(name) {
-    return String(name || '').trim().toLowerCase();
-}
-
-function getVendorSkuForName(name) {
-    const key = normalizeVendorKey(name);
-    return key ? (vendorSkuByName[key] || '') : '';
-}
-
-function mergeVendorOptionsWithCatalog(baseOptions) {
-    const names = new Set((Array.isArray(baseOptions) ? baseOptions : []).map(name => String(name || '').trim()).filter(Boolean));
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-}
-
-async function loadVendorCatalog() {
-    try {
-        const response = await fetch(`${API_BASE}/vendor-catalog`);
-        const data = await response.json();
-        if (!data.success || !Array.isArray(data.vendors)) return;
-
-        vendorSkuByName = {};
-        data.vendors.forEach(vendor => {
-            const name = String(vendor?.name || '').trim();
-            if (!name) return;
-            const key = normalizeVendorKey(name);
-            vendorSkuByName[key] = vendor?.sku != null ? String(vendor.sku) : '';
-        });
-
-        const vendorNames = data.vendors
-            .map(vendor => String(vendor?.name || '').trim())
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b));
-
-        if (vendorNames.length > 0) {
-            itemVendorOptions = {
-                door: mergeVendorOptionsWithCatalog([...itemVendorOptions.door, ...vendorNames]),
-                window: mergeVendorOptionsWithCatalog([...itemVendorOptions.window, ...vendorNames])
-            };
-        }
-
-        currentLineItems = currentLineItems.map(item => {
-            if (item.vendor && !item.vendor_sku) {
-                return { ...item, vendor_sku: getVendorSkuForName(item.vendor) || '' };
-            }
-            return item;
-        });
-
-        if (currentLineItems.length > 0) {
-            renderLineItemsEditor();
-            syncLineItemsToHiddenField();
-        }
-    } catch (error) {
-        console.warn('Unable to load vendor SKU catalog.', error);
-    }
-}
-
-async function loadItemVendorOptions() {
-    try {
-        const response = await fetch(`${API_BASE}/item-vendor-options`);
-        const data = await response.json();
-        if (!data.success) return;
-
-        itemVendorOptions = {
-            door: Array.isArray(data.vendors?.door) ? data.vendors.door : [...DEFAULT_ITEM_VENDOR_OPTIONS.door],
-            window: Array.isArray(data.vendors?.window) ? data.vendors.window : [...DEFAULT_ITEM_VENDOR_OPTIONS.window]
-        };
-
-        itemVendorOptions = {
-            door: mergeVendorOptionsWithCatalog(itemVendorOptions.door),
-            window: mergeVendorOptionsWithCatalog(itemVendorOptions.window)
-        };
-
-        if (currentLineItems.length > 0) {
-            renderLineItemsEditor();
-        }
-    } catch (error) {
-        console.warn('Unable to load item vendor options, using defaults.', error);
-    }
-}
-
-async function loadVendorSeriesOptions() {
-    try {
-        const response = await fetch(`${API_BASE}/vendor-series-options`);
-        const data = await response.json();
-        if (!data.success) return;
-
-        vendorSeriesOptions = normalizeVendorSeriesMap(data.series);
-        if (currentLineItems.length > 0) {
-            renderLineItemsEditor();
-        }
-    } catch (error) {
-        console.warn('Unable to load vendor series options.', error);
-    }
-}
-
-async function loadFinTypeOptions() {
-    try {
-        const response = await fetch(`${API_BASE}/fin-type-options`);
-        const data = await response.json();
-        if (!data.success) return;
-
-        finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
-            ? data.fin_types.map(name => normalizeFinTypeValue(name)).filter(Boolean)
-            : [...DEFAULT_FIN_TYPE_OPTIONS];
-
-        if (currentLineItems.length > 0) {
-            renderLineItemsEditor();
-        }
-    } catch (error) {
-        console.warn('Unable to load fin type options.', error);
-    }
-}
-
-async function addItemStyle(itemType) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const label = normalizedType === 'window' ? 'window' : 'door';
-    const styleName = prompt(`Add a new ${label} style:`);
-
-    if (styleName === null) return;
-    const trimmedStyleName = styleName.trim();
-    if (!trimmedStyleName) {
-        showError('Style name cannot be empty');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/item-style-options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                item_type: normalizedType,
-                style_name: trimmedStyleName
-            })
-        });
-        const data = await response.json();
-
-        if (!data.success) {
-            showError(data.error || 'Failed to save style');
-            return;
-        }
-
-        itemStyleOptions = {
-            door: Array.isArray(data.styles?.door) ? data.styles.door : [...DEFAULT_ITEM_STYLE_OPTIONS.door],
-            window: Array.isArray(data.styles?.window) ? data.styles.window : [...DEFAULT_ITEM_STYLE_OPTIONS.window]
-        };
-
-        renderLineItemsEditor();
-        showToast(`${trimmedStyleName} saved for ${label} styles`);
-    } catch (error) {
-        console.error('Error saving style option:', error);
-        showError('Failed to save style option');
-    }
-}
-
-async function addItemVendor(itemType) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const label = normalizedType === 'window' ? 'window' : 'door';
-    const vendorName = prompt(`Add a new ${label} vendor:`);
-
-    if (vendorName === null) return;
-    const trimmedVendorName = vendorName.trim();
-    if (!trimmedVendorName) {
-        showError('Vendor name cannot be empty');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/item-vendor-options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                item_type: normalizedType,
-                vendor_name: trimmedVendorName
-            })
-        });
-        const data = await response.json();
-
-        if (!data.success) {
-            showError(data.error || 'Failed to save vendor');
-            return;
-        }
-
-        itemVendorOptions = {
-            door: Array.isArray(data.vendors?.door) ? data.vendors.door : [...DEFAULT_ITEM_VENDOR_OPTIONS.door],
-            window: Array.isArray(data.vendors?.window) ? data.vendors.window : [...DEFAULT_ITEM_VENDOR_OPTIONS.window]
-        };
-
-        renderLineItemsEditor();
-        showToast(`${trimmedVendorName} saved for ${label} vendors`);
-    } catch (error) {
-        console.error('Error saving vendor option:', error);
-        showError('Failed to save vendor option');
-    }
-}
-
-async function addVendorSeriesOption(itemType, index) {
-    const normalizedType = itemType === 'window' ? 'window' : 'door';
-    const item = currentLineItems[index];
-    if (!item) return;
-
-    const vendorName = String(item.vendor || '').trim();
-    if (!vendorName) {
-        showError('Select a vendor before adding a series');
-        return;
-    }
-
-    const seriesName = prompt(`Add a new ${vendorName} series:`);
-    if (seriesName === null) return;
-    const trimmedSeriesName = seriesName.trim();
-    if (!trimmedSeriesName) {
-        showError('Series name cannot be empty');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/vendor-series-options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                item_type: normalizedType,
-                vendor_name: vendorName,
-                series_name: trimmedSeriesName
-            })
-        });
-        const data = await response.json();
-
-        if (!data.success) {
-            showError(data.error || 'Failed to save series option');
-            return;
-        }
-
-        vendorSeriesOptions = normalizeVendorSeriesMap(data.series);
-        updateLineItem(index, 'series', trimmedSeriesName);
-        renderLineItemsEditor();
-        showToast(`${trimmedSeriesName} added for ${vendorName}`);
-    } catch (error) {
-        console.error('Error saving vendor series option:', error);
-        showError('Failed to save series option');
-    }
-}
-
-async function addFinTypeOption() {
-    const finTypeName = prompt('Add a new fin type:');
-    if (finTypeName === null) return;
-    const trimmedFinTypeName = finTypeName.trim();
-    if (!trimmedFinTypeName) {
-        showError('Fin type cannot be empty');
-        return;
-    }
-
-    const normalizedFinTypeName = normalizeFinTypeValue(trimmedFinTypeName);
-
-    try {
-        const response = await fetch(`${API_BASE}/fin-type-options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fin_type_name: normalizedFinTypeName })
-        });
-        const data = await response.json();
-
-        if (!data.success) {
-            showError(data.error || 'Failed to save fin type');
-            return;
-        }
-
-        finTypeOptions = Array.isArray(data.fin_types) && data.fin_types.length > 0
-            ? data.fin_types.map(name => normalizeFinTypeValue(name)).filter(Boolean)
-            : [...DEFAULT_FIN_TYPE_OPTIONS];
-        renderLineItemsEditor();
-        showToast(`${normalizedFinTypeName} added to fin types`);
-    } catch (error) {
-        console.error('Error saving fin type option:', error);
-        showError('Failed to save fin type option');
-    }
-}
-
-function renderOptionButtons(index, field, options, selectedValue) {
-    return options
-        .map(option => {
-            const activeClass = String(selectedValue || '') === option ? 'active' : '';
-            return `<button type="button" class="item-option-button ${activeClass}" data-item-index="${index}" data-item-field="${field}" data-item-value="${option}">${option}</button>`;
-        })
-        .join('');
-}
-
-function renderVendorOptionButtons(index, options, selectedValue) {
-    return options
-        .map(option => {
-            const activeClass = String(selectedValue || '') === option ? 'active' : '';
-            const sku = getVendorSkuForName(option);
-            const title = sku ? `SKU: ${sku}` : 'SKU unavailable';
-            return `<button type="button" class="item-option-button ${activeClass}" title="${escapeHtml(title)}" data-item-index="${index}" data-item-field="vendor" data-item-value="${option}">${option}</button>`;
-        })
-        .join('');
-}
-
-function renderSelectOptions(options, selectedValue, placeholder) {
-    const placeholderOption = `<option value="">${escapeHtml(placeholder || 'Select')}</option>`;
-    const optionHtml = (Array.isArray(options) ? options : [])
-        .map(option => {
-            const isSelected = String(selectedValue || '') === String(option);
-            return `<option value="${escapeHtml(option)}" ${isSelected ? 'selected' : ''}>${escapeHtml(option)}</option>`;
-        })
-        .join('');
-    return placeholderOption + optionHtml;
-}
-
-function renderLineItemsEditor() {
+function commitAllLineItemControls() {
     if (!lineItemsList) return;
 
-    if (currentLineItems.length === 0) {
-        lineItemsList.innerHTML = '<div class="line-items-empty">No items yet. Start with Door or Window.</div>';
-        return;
+    lineItemsList.querySelectorAll('input[data-item-field], textarea[data-item-field], select[data-item-field]').forEach(control => {
+        const indexAttr = control.getAttribute('data-item-index');
+        const field = control.getAttribute('data-item-field');
+        if (indexAttr === null || !field) return;
+
+        const index = parseInt(indexAttr, 10);
+        if (!Number.isFinite(index)) return;
+
+        const value = field === 'quantity'
+            ? parseInt(control.value || '1', 10)
+            : (control.type === 'checkbox' ? control.checked : control.value);
+
+        if (control.tagName === 'SELECT' && isAddNewLineItemOption(field, value)) return;
+
+        updateLineItem(index, field, value, { suppressRender: true, autosave: false });
+    });
+
+    currentLineItems.forEach(item => {
+        if (item && item.vendor && !sanitizeVendorSku(item.vendor_sku)) {
+            item.vendor_sku = resolveVendorSkuForCtrlAltS(item);
+        }
+    });
+    syncLineItemsToHiddenField();
+}
+const STAGE_BLANK_PRESERVE_FIELDS = new Set([
+    'customer_name',
+    'customer_phone',
+    'customer_email',
+    'customer_number',
+    'project_name'
+]);
+
+function shouldPreserveInlineValueFromBlankStage(fieldName, stageValue) {
+    if (!STAGE_BLANK_PRESERVE_FIELDS.has(fieldName)) return false;
+    if (stageValue !== null && stageValue !== undefined && String(stageValue).trim() !== '') return false;
+
+    const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
+    const sourceInput = sourceInputId ? document.getElementById(sourceInputId) : null;
+    return Boolean(sourceInput && String(sourceInput.value || '').trim());
+}
+function getStageControlValue(control, fieldName) {
+    if (!control) return '';
+    if (control.type === 'checkbox') return Boolean(control.checked);
+    const rawValue = fieldName === 'transfer_location'
+        ? normalizeTransferLocation(control.value)
+        : control.value;
+    if (rawValue !== control.value && fieldName === 'transfer_location') {
+        control.value = rawValue;
     }
-
-    lineItemsList.innerHTML = currentLineItems.map((item, index) => {
-        const isDoor = item.type === 'door';
-        const isCollapsed = Boolean(item.ui_collapsed);
-        const seriesOptions = getSeriesOptionsForItemVendor(item.type, item.vendor);
-        const seriesOptionsWithSelected = item.series && !seriesOptions.includes(item.series)
-            ? [item.series, ...seriesOptions]
-            : seriesOptions;
-        const finOptions = getFinTypeOptions();
-        const finOptionsWithSelected = item.fin_type && !finOptions.includes(item.fin_type)
-            ? [item.fin_type, ...finOptions]
-            : finOptions;
-        return `
-            <div class="line-item-card">
-                <div class="line-item-header">
-                    <div class="line-item-type-toggle">
-                        <button type="button" class="item-type-button ${isDoor ? 'active' : ''}" data-item-index="${index}" data-item-field="type" data-item-value="door">Door</button>
-                        <button type="button" class="item-type-button ${!isDoor ? 'active' : ''}" data-item-index="${index}" data-item-field="type" data-item-value="window">Window</button>
-                    </div>
-                    <div class="line-item-header-actions">
-                        <button type="button" class="item-move-button" data-item-move-up="${index}" ${index === 0 ? 'disabled' : ''} title="Move item up">Up</button>
-                        <button type="button" class="item-move-button" data-item-move-down="${index}" ${index === currentLineItems.length - 1 ? 'disabled' : ''} title="Move item down">Down</button>
-                        <button type="button" class="item-collapse-button" data-item-toggle="${index}">${isCollapsed ? 'Expand' : 'Collapse'}</button>
-                        <button type="button" class="item-copy-button" data-item-copy="${index}">Copy</button>
-                        <button type="button" class="item-remove-button" data-item-remove="${index}">Remove</button>
-                    </div>
-                </div>
-
-                <div class="line-item-grid line-item-grid-quick">
-                    <div class="line-item-field">
-                        <label>Quantity</label>
-                        <input type="number" min="1" value="${item.quantity}" data-item-index="${index}" data-item-field="quantity">
-                    </div>
-                    <div class="line-item-field">
-                        <label>Width</label>
-                        <input type="text" value="${escapeHtml(item.width || '')}" data-item-index="${index}" data-item-field="width" placeholder="e.g. 36\"">
-                    </div>
-                    <div class="line-item-field">
-                        <label>Height</label>
-                        <input type="text" value="${escapeHtml(item.height || '')}" data-item-index="${index}" data-item-field="height" placeholder="e.g. 80\"">
-                    </div>
-                    <div class="line-item-field">
-                        <label>Unit Price</label>
-                        <input type="number" min="0" step="0.01" value="${escapeHtml(item.price || '')}" data-item-index="${index}" data-item-field="price" placeholder="e.g. 499.99">
-                    </div>
-                </div>
-
-                <div class="line-item-details ${isCollapsed ? 'collapsed' : ''}">
-                <div class="line-item-grid">
-                    <div class="line-item-field">
-                        <label>Room / Location</label>
-                        <input type="text" value="${escapeHtml(item.room || '')}" data-item-index="${index}" data-item-field="room">
-                    </div>
-                </div>
-
-                <div class="line-item-options">
-                    ${!isDoor ? `
-                    <div class="line-item-field">
-                        <label>Handing</label>
-                        <select data-item-index="${index}" data-item-field="operation">
-                            ${renderSelectOptions(getWindowHandingOptions(), item.operation, 'Select handing')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-handing="window">+ Add Handing</button>
-                    </div>
-                    ` : ''}
-
-                    <div class="line-item-field">
-                        <label>${isDoor ? 'Door Style' : 'Window Style'}</label>
-                        ${isDoor ? `
-                        <select data-item-index="${index}" data-item-field="style">
-                            ${renderSelectOptions(getStyleOptionsForType('door'), item.style, 'Select door style')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-style-type="door">+ Add Style</button>
-                        ` : `
-                        <select data-item-index="${index}" data-item-field="style">
-                            ${renderSelectOptions(getStyleOptionsForType('window'), item.style, 'Select window style')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-style-type="window">+ Add Style</button>
-                        `}
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>Vendor</label>
-                        ${isDoor ? `
-                        <select data-item-index="${index}" data-item-field="vendor">
-                            ${renderSelectOptions(getVendorOptionsForType('door'), item.vendor, 'Select vendor')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-vendor-type="door">+ Add Vendor</button>
-                        ` : `
-                        <select data-item-index="${index}" data-item-field="vendor">
-                            ${renderSelectOptions(getVendorOptionsForType('window'), item.vendor, 'Select vendor')}
-                        </select>
-                        `}
-                        ${item.vendor_sku ? `<div class="item-vendor-sku">SKU: ${escapeHtml(item.vendor_sku)}</div>` : ''}
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>Series</label>
-                        <select data-item-index="${index}" data-item-field="series">
-                            ${renderSelectOptions(seriesOptionsWithSelected, item.series, item.vendor ? 'Select series' : 'Choose vendor first')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-series-index="${index}" data-add-series-type="${item.type}">+ Add Series for Vendor</button>
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>Fin Type</label>
-                        <select data-item-index="${index}" data-item-field="fin_type">
-                            ${renderSelectOptions(finOptionsWithSelected, item.fin_type, 'Select fin type')}
-                        </select>
-                        <button type="button" class="item-add-style-button" data-add-fin-type="true">+ Add Fin Type</button>
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>Argon Included</label>
-                        <select data-item-index="${index}" data-item-field="argon_included">
-                            ${renderSelectOptions(['Included', 'Not Included'], item.argon_included, 'Select argon option')}
-                        </select>
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>${isDoor ? 'Material' : 'Frame'}</label>
-                        ${isDoor ? `
-                        <select data-item-index="${index}" data-item-field="material">
-                            ${renderSelectOptions(['Wood', 'Fiberglass', 'Steel'], item.material, 'Select material')}
-                        </select>
-                        ` : `
-                        <select data-item-index="${index}" data-item-field="frame">
-                            ${renderSelectOptions(['Vinyl', 'Wood', 'Aluminum', 'Fiberglass'], item.frame, 'Select frame')}
-                        </select>
-                        `}
-                    </div>
-
-                    <div class="line-item-field">
-                        <label>${isDoor ? 'Swing' : 'Glass'}</label>
-                        ${isDoor ? `
-                        <select data-item-index="${index}" data-item-field="swing">
-                            ${renderSelectOptions(['LH', 'RH', 'LH Outswing', 'RH Outswing'], item.swing, 'Select swing')}
-                        </select>
-                        ` : `
-                        <select data-item-index="${index}" data-item-field="glass">
-                            ${renderSelectOptions(['Clear', 'Low-E', 'Tempered', 'Obscure'], item.glass, 'Select glass')}
-                        </select>
-                        `}
-                    </div>
-                </div>
-
-                <div class="line-item-field">
-                    <label>Notes</label>
-                    <textarea rows="2" data-item-index="${index}" data-item-field="notes">${escapeHtml(item.notes || '')}</textarea>
-                </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    bindLineItemsEditorEvents();
+    return rawValue;
 }
 
-function bindLineItemsEditorEvents() {
-    if (!lineItemsList) return;
+function syncStageDetailControlToSource(control) {
+    if (!control || !control.getAttribute) return;
+    const fieldName = control.getAttribute('data-stage-source-field');
+    if (!fieldName || Object.prototype.hasOwnProperty.call(STAGE_DONE_FIELDS, fieldName)) return;
 
-    lineItemsList.querySelectorAll('[data-item-move-up]').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-move-up'), 10);
-            moveLineItem(index, -1);
-        });
-    });
+    const value = getStageControlValue(control, fieldName);
+    if (shouldPreserveInlineValueFromBlankStage(fieldName, value)) return;
 
-    lineItemsList.querySelectorAll('[data-item-move-down]').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-move-down'), 10);
-            moveLineItem(index, 1);
-        });
-    });
+    const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
+    if (sourceInputId) {
+        const sourceInput = document.getElementById(sourceInputId);
+        if (sourceInput) sourceInput.value = value;
+    }
+}
 
-    lineItemsList.querySelectorAll('[data-item-remove]').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-remove'), 10);
-            removeLineItem(index);
-        });
-    });
+function commitActiveAdditionalQuoteControl() {
+    const active = document.activeElement;
+    if (!active || !active.id) return;
 
-    lineItemsList.querySelectorAll('[data-item-copy]').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-copy'), 10);
-            copyLineItem(index);
-        });
-    });
+    const match = String(active.id).match(/^stage_additional_quote_(number|date|total)_(\d+)$/);
+    if (!match) return;
 
-    lineItemsList.querySelectorAll('[data-item-toggle]').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-toggle'), 10);
-            toggleLineItemCollapse(index);
-        });
-    });
+    const fieldByKind = {
+        number: 'quote_number',
+        date: 'quote_date',
+        total: 'quote_total'
+    };
+    const field = fieldByKind[match[1]];
+    const index = parseInt(match[2], 10);
+    if (!field || !Number.isFinite(index)) return;
 
-    lineItemsList.querySelectorAll('.item-type-button, .item-option-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const index = parseInt(button.getAttribute('data-item-index'), 10);
-            const field = button.getAttribute('data-item-field');
-            const value = button.getAttribute('data-item-value');
-            updateLineItem(index, field, value);
-            renderLineItemsEditor();
-        });
-    });
+    setAdditionalQuoteFieldValue(index, field, active.value);
+    syncAdditionalQuotesToHiddenField();
+    syncLegacySecondaryQuoteFieldsFromAdditional('inline');
+}
 
-    lineItemsList.querySelectorAll('[data-add-style-type]').forEach(button => {
-        button.addEventListener('click', async () => {
-            const itemType = button.getAttribute('data-add-style-type');
-            await addItemStyle(itemType);
-        });
-    });
 
-    lineItemsList.querySelectorAll('[data-add-vendor-type]').forEach(button => {
-        button.addEventListener('click', async () => {
-            const itemType = button.getAttribute('data-add-vendor-type');
-            await addItemVendor(itemType);
-        });
-    });
+function setAdditionalQuoteFieldValue(index, field, value) {
+    if (!currentAdditionalQuotes[index]) return;
+    currentAdditionalQuotes[index][field] = field === 'quote_date'
+        ? toInputDate(value)
+        : String(value || '').trim();
+}
 
-    lineItemsList.querySelectorAll('[data-add-series-index]').forEach(button => {
-        button.addEventListener('click', async () => {
-            const index = parseInt(button.getAttribute('data-add-series-index'), 10);
-            const itemType = button.getAttribute('data-add-series-type');
-            await addVendorSeriesOption(itemType, index);
-        });
-    });
+function setAdditionalInvoiceFieldValue(index, field, value) {
+    if (!currentAdditionalInvoices[index]) return;
+    currentAdditionalInvoices[index][field] = field === 'invoice_date'
+        ? toInputDate(value)
+        : String(value || '').trim();
+}
 
-    lineItemsList.querySelectorAll('[data-add-fin-type]').forEach(button => {
-        button.addEventListener('click', async () => {
-            await addFinTypeOption();
-        });
-    });
+function setAdditionalPurchaseOrderFieldValue(index, field, value) {
+    if (!currentAdditionalPurchaseOrders[index]) return;
+    if (field === 'po_date_signed' || field === 'eta_date') {
+        currentAdditionalPurchaseOrders[index][field] = toInputDate(value);
+    } else {
+        currentAdditionalPurchaseOrders[index][field] = String(value || '').trim();
+    }
+}
 
-    lineItemsList.querySelectorAll('[data-add-handing]').forEach(button => {
-        button.addEventListener('click', () => {
-            addWindowHandingOption();
-        });
-    });
+function commitAllAdditionalTrackingControls() {
+    if (!processTimeline) return;
 
-    lineItemsList.querySelectorAll('input[data-item-field], textarea[data-item-field], select[data-item-field]').forEach(input => {
-        const tagName = input.tagName;
-        const eventName = tagName === 'TEXTAREA' ? 'input' : 'change';
-        input.addEventListener(eventName, () => {
-            const index = parseInt(input.getAttribute('data-item-index'), 10);
-            const field = input.getAttribute('data-item-field');
-            const value = field === 'quantity' ? parseInt(input.value || '1', 10) : input.value;
-            updateLineItem(index, field, value);
-        });
+    processTimeline.querySelectorAll('input[id^="stage_additional_quote_"]').forEach(input => {
+        const match = String(input.id || '').match(/^stage_additional_quote_(number|date|total)_(\d+)$/);
+        if (!match) return;
+        const fieldByKind = { number: 'quote_number', date: 'quote_date', total: 'quote_total' };
+        setAdditionalQuoteFieldValue(parseInt(match[2], 10), fieldByKind[match[1]], input.value);
     });
+    syncAdditionalQuotesToHiddenField();
+    syncLegacySecondaryQuoteFieldsFromAdditional('inline');
+
+    processTimeline.querySelectorAll('input[id^="stage_additional_invoice_"]').forEach(input => {
+        const match = String(input.id || '').match(/^stage_additional_invoice_(number|date|total)_(\d+)$/);
+        if (!match) return;
+        const fieldByKind = { number: 'invoice_number', date: 'invoice_date', total: 'invoice_total' };
+        setAdditionalInvoiceFieldValue(parseInt(match[2], 10), fieldByKind[match[1]], input.value);
+    });
+    syncAdditionalInvoicesToHiddenField();
+
+    processTimeline.querySelectorAll('input[id^="stage_additional_po_"]').forEach(input => {
+        const match = String(input.id || '').match(/^stage_additional_po_(po_numbers|po_date_signed|vendor_ack_number|vendor_ack_total|eta_date|vendor)_(\d+)$/);
+        if (!match) return;
+        setAdditionalPurchaseOrderFieldValue(parseInt(match[2], 10), match[1], input.value);
+    });
+    syncAdditionalPurchaseOrdersToHiddenField();
+}
+
+
+function removeBlankStageTrackingFields(payload) {
+    if (!payload) return payload;
+    [
+        'quote_number', 'quote_date', 'quote_total',
+        'quote_number_2', 'quote_date_2', 'quote_total_2',
+        'invoice_number', 'invoice_date', 'invoice_total',
+        'po_numbers', 'po_date_signed', 'vendor_ack_number', 'vendor_ack_total', 'eta_date'
+    ].forEach(fieldName => {
+        if (!Object.prototype.hasOwnProperty.call(payload, fieldName)) return;
+        const value = payload[fieldName];
+        if (value === null || value === undefined || String(value).trim() === '') {
+            delete payload[fieldName];
+        }
+    });
+    return payload;
+}
+function attachAdditionalTrackingPayload(payload) {
+    if (!payload) return payload;
+
+    const firstAdditional = currentAdditionalQuotes[0] || null;
+    payload.additional_quotes = currentAdditionalQuotes.length > 0 ? JSON.stringify(currentAdditionalQuotes) : null;
+    payload.additional_invoices = currentAdditionalInvoices.length > 0 ? JSON.stringify(currentAdditionalInvoices) : null;
+    payload.additional_pos = currentAdditionalPurchaseOrders.length > 0 ? JSON.stringify(currentAdditionalPurchaseOrders) : null;
+    payload.quote_number_2 = firstAdditional ? (firstAdditional.quote_number || null) : null;
+    payload.quote_date_2 = firstAdditional ? (firstAdditional.quote_date || null) : null;
+    payload.quote_total_2 = firstAdditional && firstAdditional.quote_total !== ''
+        ? parseFloat(firstAdditional.quote_total)
+        : null;
+    return payload;
+}
+function commitActiveAdditionalInvoiceControl() {
+    const active = document.activeElement;
+    if (!active || !active.id) return;
+
+    const match = String(active.id).match(/^stage_additional_invoice_(number|date|total)_(\d+)$/);
+    if (!match) return;
+
+    const fieldByKind = {
+        number: 'invoice_number',
+        date: 'invoice_date',
+        total: 'invoice_total'
+    };
+    const field = fieldByKind[match[1]];
+    const index = parseInt(match[2], 10);
+    if (!field || !Number.isFinite(index)) return;
+
+    setAdditionalInvoiceFieldValue(index, field, active.value);
+    syncAdditionalInvoicesToHiddenField();
+}
+
+function commitActiveAdditionalPurchaseOrderControl() {
+    const active = document.activeElement;
+    if (!active || !active.id) return;
+
+    const match = String(active.id).match(/^stage_additional_po_(po_numbers|po_date_signed|vendor_ack_number|vendor_ack_total|eta_date|vendor)_(\d+)$/);
+    if (!match) return;
+
+    const field = match[1];
+    const index = parseInt(match[2], 10);
+    if (!field || !Number.isFinite(index)) return;
+
+    setAdditionalPurchaseOrderFieldValue(index, field, active.value);
+    syncAdditionalPurchaseOrdersToHiddenField();
+}
+function commitAllStageDetailControls() {
+    if (!processTimeline) return;
+    processTimeline
+        .querySelectorAll('[data-stage-source-field]')
+        .forEach(syncStageDetailControlToSource);
+}
+
+function flushActiveEditsBeforeSave() {
+    commitActiveAdditionalQuoteControl();
+    commitActiveAdditionalInvoiceControl();
+    commitActiveAdditionalPurchaseOrderControl();
+    commitAllStageDetailControls();
+    commitAllAdditionalTrackingControls();
+    commitAllLineItemControls();
 }
 
 // Debounce function for search input
@@ -1780,15 +1236,40 @@ async function loadOrders() {
         stage,
         show_completed: showCompleted
     });
+
+    // Stamp this request; discard the response if a newer one has already resolved.
+    loadOrdersSequence += 1;
+    const thisSequence = loadOrdersSequence;
     
     try {
         const response = await fetch(`${API_BASE}/orders?${params}`);
+
+        if (response.status === 401) {
+            const nextUrl = `${window.location.pathname}${window.location.search}`;
+            window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`Orders request failed: ${response.status}`);
+        }
+
         const data = await response.json();
+
+        // A newer loadOrders() call already finished — ignore this stale response.
+        if (thisSequence !== loadOrdersSequence) return;
         
         if (data.success) {
             const previousSelectedOrderId = selectedOrderId;
-            allOrders = sortOrdersForList(data.orders || []);
-            const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
+            const incoming = sortOrdersForList(data.orders || []);
+            const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(incoming);
+
+            // Only replace allOrders when we actually got results, OR there is no
+            // active search/filter (user genuinely wants to see an empty list).
+            const isFiltered = Boolean(search || (stage && stage !== '(All)'));
+            if (incoming.length > 0 || !isFiltered) {
+                allOrders = incoming;
+            }
 
             if (allOrders.length === 0) {
                 selectedOrderId = null;
@@ -1800,7 +1281,7 @@ async function loadOrders() {
             if (selectedOrderId !== previousSelectedOrderId) {
                 const selectedOrder = getSelectedOrder();
                 openProcessStages = new Set();
-                if (selectedOrder && selectedOrder.stage && PROCESS_STAGES.includes(selectedOrder.stage)) {
+                if (selectedOrder && selectedOrder.stage && STAGES.includes(selectedOrder.stage)) {
                     openProcessStages.add(selectedOrder.stage);
                 }
             }
@@ -1860,9 +1341,9 @@ function renderOrdersTable(orders) {
                 <p>No orders found</p>
             </div>
         `;
+
         return;
-    }
-    
+    }    
     const sortedOrders = sortOrdersForList(orders);
 
     ordersList.innerHTML = sortedOrders.map(order => {
@@ -1925,9 +1406,9 @@ function renderCompletedOrders(orders) {
                 <p>No completed orders found</p>
             </div>
         `;
+
         return;
     }
-
     completedOrdersList.innerHTML = orders.map(order => {
         const isActive = order.id === selectedOrderId;
         const hasCustomerNumber = Boolean(String(order.customer_number || '').trim());
@@ -2013,7 +1494,7 @@ async function selectOrder(orderId) {
 
     const selectedOrder = hydrated || getSelectedOrder();
     openProcessStages = new Set();
-    if (selectedOrder && selectedOrder.stage && PROCESS_STAGES.includes(selectedOrder.stage)) {
+    if (selectedOrder && selectedOrder.stage && STAGES.includes(selectedOrder.stage)) {
         openProcessStages.add(selectedOrder.stage);
     }
 
@@ -2063,7 +1544,7 @@ function syncProcessJumpStage(order) {
         return;
     }
 
-    processJumpStageSelect.innerHTML = PROCESS_STAGES
+    processJumpStageSelect.innerHTML = STAGES
         .map(stage => `<option value="${stage}" ${stage === order.stage ? 'selected' : ''}>${formatStageLabel(stage)}</option>`)
         .join('');
 }
@@ -2081,6 +1562,7 @@ function jumpToSelectedStage() {
 }
 
 async function moveSelectedOrderStage(direction) {
+    flushActiveEditsBeforeSave();
     const order = getSelectedOrder();
     if (!order || !order.id) {
         showError('Select an order first');
@@ -2106,7 +1588,10 @@ async function moveSelectedOrderStage(direction) {
         return;
     }
 
-    const payload = { stage: nextStage };
+    const payload = removeBlankStageTrackingFields({
+        ...collectStageDetailDraftPayload(),
+        stage: nextStage,
+    });
     const inlinePriorityInput = document.getElementById(INLINE_ORDER_FIELDS.priority_manual);
     const currentPriorityValue = inlinePriorityInput ? inlinePriorityInput.value : order.priority_manual;
     const nextAutoPriority = getAutoPriorityUpdateForStageChange(order.stage, currentPriorityValue, nextStage);
@@ -2126,6 +1611,8 @@ async function moveSelectedOrderStage(direction) {
     if (currentLineItems.length > 0) {
         payload.line_items = JSON.stringify(currentLineItems);
     }
+
+    attachAdditionalTrackingPayload(payload);
 
     try {
         const response = await fetch(`${API_BASE}/orders/${order.id}`, {
@@ -2263,7 +1750,10 @@ function renderSalesProcess(order) {
     processOrderMeta.innerHTML = `
         <span class="process-order-meta-item">Project: ${escapeHtml(order.project_name || 'No project')}</span>
         <span class="process-order-meta-item">PO(s): ${escapeHtml(order.po_numbers_display || order.po_numbers || order.po_number || 'Not assigned')}</span>
-        ${accountNumber ? `<span class="process-order-meta-item account-copy" title="Copy account number" onclick="copyCustomerLookupValueFromEncoded('${encodeURIComponent(accountNumber)}', 'account number')">Acct #: ${escapeHtml(accountNumber)}</span>` : ''}
+        <span class="process-order-meta-item account-edit-chip">
+            <button type="button" class="account-copy-inline" title="Copy account number" onclick="copyCustomerLookupValueFromEncoded('${encodeURIComponent(accountNumber)}', 'account number')" ${accountNumber ? '' : 'disabled'}>Acct #: ${escapeHtml(accountNumber || 'None')}</button>
+            <button type="button" class="account-edit-inline" onclick="editSelectedOrderCustomerNumber(event)">Edit</button>
+        </span>
         ${streetOnlyAddress ? `<span class="process-order-meta-item">Address: ${escapeHtml(streetOnlyAddress)}</span>` : ''}
     `;
     processCurrentStage.textContent = formatStageLabel(order.stage || 'Not set');
@@ -2283,11 +1773,11 @@ function renderSalesProcess(order) {
     populateInlineOrderForm(order);
 
     // If no open stages, open the current stage by default
-    if (openProcessStages.size === 0 && order.stage && PROCESS_STAGES.includes(order.stage)) {
+    if (openProcessStages.size === 0 && order.stage && STAGES.includes(order.stage)) {
         openProcessStages.add(order.stage);
     }
 
-    processTimeline.innerHTML = PROCESS_STAGES.map((stage, index) => {
+    processTimeline.innerHTML = STAGES.map((stage, index) => {
         const statusClass = getStageStatusClass(stage, order);
 
         const isOpen = openProcessStages.has(stage);
@@ -2389,7 +1879,7 @@ function renderFloatingStageJumpBar(order) {
         return;
     }
 
-    floatingStageJumpTrack.innerHTML = PROCESS_STAGES.map((stage, index) => {
+    floatingStageJumpTrack.innerHTML = STAGES.map((stage, index) => {
         const statusClass = getStageStatusClass(stage, order);
         const fullLabel = formatStageLabel(stage);
         const expandedWidth = Math.min(320, Math.max(96, 56 + (fullLabel.length * 8)));
@@ -2460,17 +1950,21 @@ function openStageDetails(stage) {
 }
 
 async function jumpToStage(stage) {
+    flushActiveEditsBeforeSave();
     const order = getSelectedOrder();
     if (!order || !order.id) {
         showError('Select an order first');
         return;
     }
 
-    if (!PROCESS_STAGES.includes(stage)) {
+    if (!STAGES.includes(stage)) {
         return;
     }
 
-    const payload = { stage };
+    const payload = removeBlankStageTrackingFields({
+        ...collectStageDetailDraftPayload(),
+        stage,
+    });
     const transferInput = processTimeline
         ? processTimeline.querySelector('[data-stage-source-field="transfer_location"]')
         : null;
@@ -2483,6 +1977,8 @@ async function jumpToStage(stage) {
     if (currentLineItems.length > 0) {
         payload.line_items = JSON.stringify(currentLineItems);
     }
+
+    attachAdditionalTrackingPayload(payload);
 
     try {
         const response = await fetch(`${API_BASE}/orders/${order.id}`, {
@@ -2514,7 +2010,65 @@ async function jumpToStage(stage) {
     }
 }
 
-function scrollToProcessStage(stage) {
+function getStageFocusableControls(stageDetails) {
+    if (!stageDetails) return [];
+
+    return Array.from(stageDetails.querySelectorAll('input, select, textarea, button, [tabindex]'))
+        .filter(element => {
+            if (element.disabled) return false;
+            if (element.hidden) return false;
+            if (element.getAttribute('aria-hidden') === 'true') return false;
+            if (element.getAttribute('tabindex') === '-1') return false;
+            if (element.matches('[data-item-bulk-star]')) return false;
+
+            const style = window.getComputedStyle(element);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+}
+
+function focusFirstStageControl(stage, options = {}) {
+    if (!processTimeline || !stage) return;
+
+    const detailsElement = processTimeline.querySelector(`[data-stage-details="${stage}"]`);
+    const firstControl = getStageFocusableControls(detailsElement)[0];
+    if (!firstControl) return;
+
+    firstControl.focus({ preventScroll: options.preventScroll !== false });
+    if (typeof firstControl.select === 'function' && firstControl.matches('input[type="text"], input[type="number"], input:not([type]), textarea')) {
+        firstControl.select();
+    }
+}
+
+function bindStageTabLoop() {
+    if (!processTimeline || processTimeline.dataset.stageTabLoopBound === 'true') return;
+    processTimeline.dataset.stageTabLoopBound = 'true';
+
+    processTimeline.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+
+        const stageDetails = event.target.closest('[data-stage-details]');
+        if (!stageDetails || !processTimeline.contains(stageDetails)) return;
+
+        const focusable = getStageFocusableControls(stageDetails);
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+            return;
+        }
+
+        if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+}
+
+function scrollToProcessStage(stage, options = {}) {
     if (!processTimeline || !stage) return;
 
     const detailsElement = processTimeline.querySelector(`[data-stage-details="${stage}"]`);
@@ -2527,6 +2081,10 @@ function scrollToProcessStage(stage) {
         behavior: 'smooth',
         block: 'center'
     });
+
+    if (options.focus !== false) {
+        requestAnimationFrame(() => focusFirstStageControl(stage));
+    }
 }
 
 function updateBackToTopVisibility() {
@@ -2641,21 +2199,129 @@ function getProcessStageSubLabel(stage, order) {
     return `${index + 1} of ${STAGES.length}`;
 }
 
+
+function getStageFieldOrderValue(order, fieldName) {
+    if (!order || !fieldName) return '';
+    if (fieldName === 'po_numbers') {
+        return order.po_numbers != null ? order.po_numbers : (order.po_number != null ? order.po_number : '');
+    }
+    return order[fieldName] != null ? order[fieldName] : '';
+}
+
+function getStageFieldRenderValue(order, fieldName) {
+    const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
+    const sourceInput = sourceInputId ? document.getElementById(sourceInputId) : null;
+    const sourceValue = sourceInput ? String(sourceInput.value || '').trim() : '';
+    if (sourceValue) return sourceValue;
+    const orderValue = getStageFieldOrderValue(order, fieldName);
+    return orderValue == null ? '' : orderValue;
+}
+
+function getStageSourceInput(fieldName) {
+    const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
+    return sourceInputId ? document.getElementById(sourceInputId) : null;
+}
+// Format a timestamp for display under the toggle
+function formatDoneTimestamp(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return `Completed: ${d.toLocaleString()}`;
+}
+
 function renderStageDetailsMarkup(stage, order) {
     const fieldNames = STAGE_SMART_FIELD_MAP[stage] || [];
     if (fieldNames.length === 0) {
             return '<div class="stage-smart-empty">No specific fields for this stage.</div>';
     }
 
+    const groupedPurchaseOrderControls = (() => {
+        const stageConfig = {
+            PO_CREATED: {
+                title: 'Additional PO Tracking',
+                doneField: 'po_done',
+                fields: [
+                    { key: 'po_numbers', label: 'PO #', type: 'text' },
+                    { key: 'po_date_signed', label: 'PO Date', type: 'date' },
+                    { key: 'vendor', label: 'Vendor', type: 'text' },
+                ],
+            },
+            ORDER_PLACED_WITH_VENDOR: {
+                title: 'Additional Orders Placed',
+                doneField: 'order_placed_done',
+                fields: [
+                    { key: 'po_numbers', label: 'PO #', type: 'text' },
+                    { key: 'vendor', label: 'Vendor', type: 'text' },
+                ],
+            },
+            VENDOR_ACK_RECEIVED: {
+                title: 'Additional Vendor Acks',
+                doneField: 'ack_received_done',
+                fields: [
+                    { key: 'vendor_ack_number', label: 'Ack #', type: 'text' },
+                    { key: 'vendor_ack_total', label: 'Ack Total', type: 'number', step: '0.01' },
+                    { key: 'vendor', label: 'Vendor', type: 'text' },
+                ],
+            },
+            ETA_CONFIRMED: {
+                title: 'Additional ETAs',
+                doneField: 'eta_confirmed_done',
+                fields: [
+                    { key: 'eta_date', label: 'ETA Date', type: 'date' },
+                    { key: 'vendor', label: 'Vendor', type: 'text' },
+                ],
+            },
+            SHIP_TICKET_RECEIVED: { title: 'Additional Ship Tickets', doneField: 'ship_ticket_done', fields: [{ key: 'vendor', label: 'Vendor', type: 'text' }] },
+            INVOICE_TO_WILL_CALL: { title: 'Additional Will Call', doneField: 'will_call_done', fields: [{ key: 'vendor', label: 'Vendor', type: 'text' }] },
+            PICKED_UP: { title: 'Additional Pickups', doneField: 'picked_up_done', fields: [{ key: 'po_numbers', label: 'PO #', type: 'text' }, { key: 'vendor', label: 'Vendor', type: 'text' }] },
+            CLOSED: { title: 'Additional Closed Orders', doneField: 'closed_done', fields: [{ key: 'po_numbers', label: 'PO #', type: 'text' }, { key: 'vendor', label: 'Vendor', type: 'text' }] },
+        };
+        const config = stageConfig[stage];
+        if (!config) return '';
+        ensureAdditionalPurchaseOrderRowsForOrderGroups(order, { persist: false });
+        if (currentAdditionalPurchaseOrders.length === 0) return '';
+        const columns = Math.min(3, Math.max(1, config.fields.length + 1));
+        const rows = currentAdditionalPurchaseOrders.map((entry, index) => {
+            const doneTimestampField = ADDITIONAL_PO_DONE_FIELD_MAP[config.doneField];
+            const checked = Boolean(entry[doneTimestampField]);
+            const fieldMarkup = config.fields.map(field => `
+                <div class="form-group">
+                    <label for="stage_additional_po_${field.key}_${index}">${escapeHtml(field.label)}</label>
+                    <input id="stage_additional_po_${field.key}_${index}" type="${field.type}" ${field.step ? `step="${field.step}"` : ''} value="${escapeHtml(field.type === 'date' ? (toInputDate(entry[field.key]) || '') : (entry[field.key] || ''))}" onchange="updateAdditionalPurchaseOrderField(${index}, '${field.key}', this.value)">
+                </div>
+            `).join('');
+            return `
+                <div class="stage-smart-field stage-smart-field-full">
+                    <div class="additional-quote-row-label">
+                        <label><span class="additional-quote-swatch ${entry.group_color ? `as400-group-${escapeHtml(entry.group_color)}` : ''}"></span>${escapeHtml(entry.as400_group || `Additional Order ${index + 1}`)}</label>
+                    </div>
+                    <div class="stage-smart-field-control">
+                        <div class="form-grid" style="grid-template-columns: repeat(${columns}, minmax(0, 1fr)); gap: 10px; width: 100%;">
+                            ${fieldMarkup}
+                            <div class="form-group">
+                                <label for="stage_additional_po_done_${config.doneField}_${index}">${escapeHtml(getStageFieldDisplayName(config.doneField))}</label>
+                                <label class="checkbox-label">
+                                    <input id="stage_additional_po_done_${config.doneField}_${index}" type="checkbox" ${checked ? 'checked' : ''} onchange="updateAdditionalPurchaseOrderDone(${index}, '${config.doneField}', this.checked)">
+                                    <span>${checked && entry[doneTimestampField] ? escapeHtml(formatDoneTimestamp(entry[doneTimestampField])) : 'Done'}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return `
+            <div class="stage-smart-field stage-smart-field-full">
+                <label>${escapeHtml(config.title)}</label>
+            </div>
+            ${rows}
+        `;
+    })();
     const quoteCreatedPrimaryFields = stage === 'QUOTE_CREATED'
         ? (() => {
-            const quoteNumberSource = document.getElementById(INLINE_ORDER_FIELDS.quote_number);
-            const quoteDateSource = document.getElementById(INLINE_ORDER_FIELDS.quote_date);
-            const quoteTotalSource = document.getElementById(INLINE_ORDER_FIELDS.quote_total);
-
-            const quoteNumberValue = quoteNumberSource ? (quoteNumberSource.value || '') : (order?.quote_number || '');
-            const quoteDateValue = quoteDateSource ? (quoteDateSource.value || '') : toInputDate(order?.quote_date);
-            const quoteTotalValue = quoteTotalSource ? (quoteTotalSource.value || '') : (order?.quote_total || '');
+            const quoteNumberValue = getStageFieldRenderValue(order, 'quote_number');
+            const quoteDateValue = getStageFieldRenderValue(order, 'quote_date');
+            const quoteTotalValue = getStageFieldRenderValue(order, 'quote_total');
 
             return `
                 <div class="stage-smart-field stage-smart-field-full">
@@ -2681,6 +2347,84 @@ function renderStageDetailsMarkup(stage, order) {
         })()
         : '';
 
+    const invoiceCreatedPrimaryFields = stage === 'INVOICE_CREATED'
+        ? (() => {
+            const invoiceNumberValue = getStageFieldRenderValue(order, 'invoice_number');
+            const invoiceDateValue = getStageFieldRenderValue(order, 'invoice_date');
+            const invoiceTotalValue = getStageFieldRenderValue(order, 'invoice_total');
+
+            return `
+                <div class="stage-smart-field stage-smart-field-full">
+                    <label>Primary Invoice</label>
+                    <div class="stage-smart-field-control">
+                        <div class="form-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%;">
+                            <div class="form-group">
+                                <label for="stage_field_INVOICE_CREATED_invoice_number">Invoice #</label>
+                                <input id="stage_field_INVOICE_CREATED_invoice_number" type="text" data-stage-source-field="invoice_number" value="${escapeHtml(invoiceNumberValue)}">
+                            </div>
+                            <div class="form-group">
+                                <label for="stage_field_INVOICE_CREATED_invoice_date">Invoice Date</label>
+                                <input id="stage_field_INVOICE_CREATED_invoice_date" type="date" data-stage-source-field="invoice_date" value="${escapeHtml(toInputDate(invoiceDateValue) || '')}">
+                            </div>
+                            <div class="form-group">
+                                <label for="stage_field_INVOICE_CREATED_invoice_total">Invoice Total</label>
+                                <input id="stage_field_INVOICE_CREATED_invoice_total" type="number" step="0.01" data-stage-source-field="invoice_total" value="${escapeHtml(invoiceTotalValue)}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        })()
+        : '';
+
+    const invoiceCreatedControls = stage === 'INVOICE_CREATED'
+        ? (() => {
+            const additionalInvoiceRows = currentAdditionalInvoices.length > 0
+                ? currentAdditionalInvoices.map((invoice, index) => `
+                    <div class="stage-smart-field stage-smart-field-full">
+                        <div class="additional-quote-row-label">
+                            <label><span class="additional-quote-swatch ${invoice.group_color ? `as400-group-${escapeHtml(invoice.group_color)}` : ''}"></span>${escapeHtml(getAdditionalInvoiceLabel(invoice, index))}</label>
+                            <button
+                                type="button"
+                                class="additional-quote-remove-icon"
+                                onclick="removeAdditionalInvoice(${index})"
+                                title="Remove this additional invoice"
+                                aria-label="Remove additional invoice ${index + 1}"
+                            >ðŸ—‘ï¸</button>
+                        </div>
+                        <div class="stage-smart-field-control">
+                            <div class="form-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%;">
+                                <div class="form-group">
+                                    <label for="stage_additional_invoice_number_${index}">Invoice #</label>
+                                    <input id="stage_additional_invoice_number_${index}" type="text" value="${escapeHtml(invoice.invoice_number || '')}" onchange="updateAdditionalInvoiceField(${index}, 'invoice_number', this.value)">
+                                </div>
+                                <div class="form-group">
+                                    <label for="stage_additional_invoice_date_${index}">Invoice Date</label>
+                                    <input id="stage_additional_invoice_date_${index}" type="date" value="${escapeHtml(toInputDate(invoice.invoice_date) || '')}" onchange="updateAdditionalInvoiceField(${index}, 'invoice_date', this.value)">
+                                </div>
+                                <div class="form-group">
+                                    <label for="stage_additional_invoice_total_${index}">Invoice Total</label>
+                                    <input id="stage_additional_invoice_total_${index}" type="number" step="0.01" value="${escapeHtml(invoice.invoice_total || '')}" onchange="updateAdditionalInvoiceField(${index}, 'invoice_total', this.value)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')
+                : '';
+
+            return `
+                <div class="stage-smart-field stage-smart-field-full">
+                    <label>Additional Invoice Tracking</label>
+                    <div class="stage-smart-field-control">
+                        <div class="quote-extra-controls">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="addAdditionalInvoice()">Add Invoice</button>
+                        </div>
+                    </div>
+                </div>
+                ${additionalInvoiceRows}
+            `;
+        })()
+        : '';
     const quoteCreatedControls = stage === 'QUOTE_CREATED'
         ? (() => {
             const inlineSection = document.getElementById('inlineSecondaryQuoteSection');
@@ -2693,7 +2437,7 @@ function renderStageDetailsMarkup(stage, order) {
                 ? currentAdditionalQuotes.map((quote, index) => `
                     <div class="stage-smart-field stage-smart-field-full">
                         <div class="additional-quote-row-label">
-                            <label>Additional Quote ${index + 1}</label>
+                            <label><span class="additional-quote-swatch ${quote.group_color ? `as400-group-${escapeHtml(quote.group_color)}` : ''}"></span>${escapeHtml(getAdditionalQuoteLabel(quote, index))}</label>
                             <button
                                 type="button"
                                 class="additional-quote-remove-icon"
@@ -2727,7 +2471,7 @@ function renderStageDetailsMarkup(stage, order) {
                     <label>Additional Quote Tracking</label>
                     <div class="stage-smart-field-control">
                         <div class="quote-extra-controls">
-                            <button type="button" class="btn btn-secondary btn-sm" id="stageAddSecondaryQuoteBtn" onclick="addAdditionalQuote()">+ Add Quote</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="stageAddSecondaryQuoteBtn" onclick="addAdditionalQuote()">➕ Add Quote</button>
                             <button type="button" class="btn btn-warning btn-sm" id="stageRemoveSecondaryQuoteBtn" onclick="hideSecondaryQuoteFields('inline')" ${hasSecondaryQuote ? '' : 'style="display:none;"'}>Remove Secondary Quote</button>
                         </div>
                     </div>
@@ -2739,9 +2483,11 @@ function renderStageDetailsMarkup(stage, order) {
 
     const fieldsToRender = stage === 'QUOTE_CREATED'
         ? fieldNames.filter(fieldName => !['quote_number', 'quote_date', 'quote_total'].includes(fieldName))
-        : fieldNames;
+        : (stage === 'INVOICE_CREATED'
+            ? fieldNames.filter(fieldName => !['invoice_number', 'invoice_date', 'invoice_total'].includes(fieldName))
+            : fieldNames);
 
-    return `${quoteCreatedControls}${quoteCreatedPrimaryFields}${fieldsToRender.map(fieldName => {
+    return `${groupedPurchaseOrderControls}${quoteCreatedControls}${quoteCreatedPrimaryFields}${invoiceCreatedControls}${invoiceCreatedPrimaryFields}${fieldsToRender.map(fieldName => {
         // Render as checkbox if in STAGE_DONE_FIELDS
                 if (STAGE_DONE_FIELDS.hasOwnProperty(fieldName)) {
                         const checked = order?.[STAGE_DONE_FIELDS[fieldName]] ? 'checked' : '';
@@ -2764,7 +2510,7 @@ function renderStageDetailsMarkup(stage, order) {
 
         // Special handling for transfer_location dropdown
         if (fieldName === 'transfer_location') {
-            const currentValue = normalizeTransferLocation(order?.transfer_location || '');
+            const currentValue = normalizeTransferLocation(getStageFieldRenderValue(order, fieldName));
             return `
                 <div class="stage-smart-field">
                     <label for="stage_field_${stage}_${fieldName}">Store Location</label>
@@ -2780,9 +2526,8 @@ function renderStageDetailsMarkup(stage, order) {
 
         // Vendor chooser for PO-related stages.
         if (fieldName === 'vendor') {
-            const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
-            const sourceInput = sourceInputId ? document.getElementById(sourceInputId) : null;
-            const currentValue = sourceInput ? (sourceInput.value || '') : (order?.[fieldName] || '');
+            const sourceInput = getStageSourceInput(fieldName);
+            const currentValue = getStageFieldRenderValue(order, fieldName);
             const baseOptions = mergeVendorOptionsWithCatalog([
                 ...(itemVendorOptions?.door || []),
                 ...(itemVendorOptions?.window || []),
@@ -2813,17 +2558,8 @@ function renderStageDetailsMarkup(stage, order) {
             `;
         }
 
-// Format a timestamp for display under the toggle
-function formatDoneTimestamp(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `Completed: ${d.toLocaleString()}`;
-}
-
-        const sourceInputId = INLINE_ORDER_FIELDS[fieldName];
-        const sourceInput = sourceInputId ? document.getElementById(sourceInputId) : null;
-        const currentValue = sourceInput ? (sourceInput.value || '') : (order?.[fieldName] || '');
+        const sourceInput = getStageSourceInput(fieldName);
+        const currentValue = getStageFieldRenderValue(order, fieldName);
         const inputType = sourceInput && sourceInput.tagName === 'INPUT' ? (sourceInput.type || 'text') : 'text';
 
         if (sourceInput && sourceInput.tagName === 'TEXTAREA') {
@@ -2866,11 +2602,17 @@ function bindStageDetailInputs() {
 
     const smartInputs = processTimeline.querySelectorAll('[data-stage-source-field]');
     smartInputs.forEach(input => {
+        input.addEventListener('input', () => {
+            syncStageDetailControlToSource(input);
+        });
+
         input.addEventListener('change', async () => {
             const fieldName = input.getAttribute('data-stage-source-field');
+            const stageContainer = input.closest('[data-stage-details]');
+            const editedStage = stageContainer ? stageContainer.getAttribute('data-stage-details') : null;
 
             if (Object.prototype.hasOwnProperty.call(STAGE_DONE_FIELDS, fieldName)) {
-                await persistStageDoneField(fieldName, Boolean(input.checked));
+                await persistStageDoneField(fieldName, Boolean(input.checked), editedStage);
                 return;
             }
 
@@ -2895,10 +2637,95 @@ function bindStageDetailInputs() {
     });
 }
 
+function normalizeStagePayloadValue(fieldName, rawValue) {
+    if (rawValue === null || rawValue === undefined) return null;
+
+    if (typeof rawValue === 'string') {
+        const trimmed = rawValue.trim();
+        if (trimmed === '') return null;
+
+        if (STAGE_NUMERIC_FIELDS.has(fieldName)) {
+            if (fieldName === 'priority_manual') {
+                const parsedInt = parseInt(trimmed, 10);
+                return Number.isNaN(parsedInt) ? null : parsedInt;
+            }
+            const parsedFloat = parseFloat(trimmed);
+            return Number.isNaN(parsedFloat) ? null : parsedFloat;
+        }
+
+        return trimmed;
+    }
+
+    if (STAGE_NUMERIC_FIELDS.has(fieldName)) {
+        return Number.isFinite(rawValue) ? rawValue : null;
+    }
+
+    return rawValue;
+}
+
+function collectStageDoneDraftPayload() {
+    if (!processTimeline) return {};
+
+    const payload = {};
+    const selectedOrder = getSelectedOrder() || currentOrder || {};
+    const doneInputs = processTimeline.querySelectorAll('[data-stage-source-field]');
+    doneInputs.forEach(input => {
+        const fieldName = input.getAttribute('data-stage-source-field');
+        const timestampField = STAGE_DONE_FIELDS[fieldName];
+        if (!timestampField) return;
+
+        payload[timestampField] = input.checked
+            ? (selectedOrder[timestampField] || new Date().toISOString())
+            : null;
+    });
+
+    return payload;
+}
+
+function collectStageDetailDraftPayload() {
+    if (!processTimeline) return {};
+
+    const payload = {};
+    const smartInputs = processTimeline.querySelectorAll('[data-stage-source-field]');
+    smartInputs.forEach(input => {
+        const fieldName = input.getAttribute('data-stage-source-field');
+        if (!fieldName) return;
+        if (Object.prototype.hasOwnProperty.call(STAGE_DONE_FIELDS, fieldName)) return;
+
+        const rawValue = fieldName === 'transfer_location'
+            ? normalizeTransferLocation(input.value)
+            : input.value;
+
+        if (shouldPreserveInlineValueFromBlankStage(fieldName, rawValue)) return;
+
+        payload[fieldName] = normalizeStagePayloadValue(fieldName, rawValue);
+    });
+
+    const selectedOrder = getSelectedOrder() || currentOrder || {};
+    const preserveWhenBlank = [
+        'quote_number', 'quote_date', 'quote_total',
+        'quote_number_2', 'quote_date_2', 'quote_total_2',
+        'invoice_number', 'invoice_date', 'invoice_total',
+        'po_numbers', 'po_date_signed', 'vendor', 'vendor_ack_number', 'vendor_ack_total', 'eta_date', 'transfer_location'
+    ];
+    preserveWhenBlank.forEach(fieldName => {
+        if (!Object.prototype.hasOwnProperty.call(payload, fieldName)) return;
+        if (payload[fieldName] !== null && payload[fieldName] !== undefined && String(payload[fieldName]).trim() !== '') return;
+        const existingValue = selectedOrder[fieldName];
+        if (existingValue !== null && existingValue !== undefined && String(existingValue).trim() !== '') {
+            payload[fieldName] = existingValue;
+        }
+    });
+
+    return {
+        ...payload,
+        ...collectStageDoneDraftPayload(),
+    };
+}
 async function persistStageField(fieldName, fieldValue) {
     if (!selectedOrderId || !fieldName) return;
 
-    const payload = { [fieldName]: fieldValue || null };
+    const payload = { [fieldName]: normalizeStagePayloadValue(fieldName, fieldValue) };
 
     try {
         const response = await fetch(`${API_BASE}/orders/${selectedOrderId}`, {
@@ -2934,12 +2761,18 @@ async function persistStageField(fieldName, fieldValue) {
     }
 }
 
-async function persistStageDoneField(fieldName, isChecked) {
+async function persistStageDoneField(fieldName, isChecked, editedStage = null) {
     const timestampField = STAGE_DONE_FIELDS[fieldName];
     if (!timestampField || !selectedOrderId) return;
 
+    commitAllStageDetailControls();
+    commitAllAdditionalTrackingControls();
+
     const timestampValue = isChecked ? new Date().toISOString() : null;
-    const payload = { [timestampField]: timestampValue };
+    const payload = removeBlankStageTrackingFields({
+        ...collectStageDetailDraftPayload(),
+        [timestampField]: timestampValue,
+    });
 
     // Keep transfer location sticky when toggling a stage checkbox.
     const transferInput = processTimeline
@@ -2948,6 +2781,8 @@ async function persistStageDoneField(fieldName, isChecked) {
     if (transferInput) {
         payload.transfer_location = normalizeTransferLocation(transferInput.value) || null;
     }
+
+    attachAdditionalTrackingPayload(payload);
 
     try {
         const response = await fetch(`${API_BASE}/orders/${selectedOrderId}`, {
@@ -2971,6 +2806,10 @@ async function persistStageDoneField(fieldName, isChecked) {
 
         if (currentOrder && currentOrder.id === result.order.id) {
             currentOrder = result.order;
+        }
+
+        if (editedStage && STAGES.includes(editedStage)) {
+            openProcessStages = new Set([editedStage]);
         }
 
         renderSalesProcess(result.order);
@@ -2998,9 +2837,9 @@ function populateInlineOrderForm(order) {
         const element = document.getElementById(elementId);
         if (!element) return;
 
-        let value = order[field] || '';
+        let value = order[field] != null ? order[field] : '';
         if (field === 'po_numbers') {
-            value = order.po_numbers || order.po_number || '';
+            value = order.po_numbers != null ? order.po_numbers : (order.po_number != null ? order.po_number : '');
         }
 
         if (field.endsWith('_date')) {
@@ -3016,6 +2855,11 @@ function populateInlineOrderForm(order) {
     syncPriorityInputWithStage(inlineStage, inlinePriority, order?.stage || stageSelect.value);
 
     loadAdditionalQuotesFromOrder(order);
+    ensureAdditionalQuoteRowsForOrderGroups(order);
+    loadAdditionalInvoicesFromOrder(order);
+    ensureAdditionalInvoiceRowsForOrderGroups(order);
+    loadAdditionalPurchaseOrdersFromOrder(order);
+    ensureAdditionalPurchaseOrderRowsForOrderGroups(order);
     syncSecondaryQuoteSection('inline', order);
 
     loadLineItemsFromOrder(order);
@@ -3023,10 +2867,21 @@ function populateInlineOrderForm(order) {
 
 function toInputDate(value) {
     if (!value) return '';
-    const dateMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (dateMatch) {
-        return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    const text = String(value).trim();
+
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
     }
+
+    const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+    if (slashMatch) {
+        const year = slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3];
+        const month = slashMatch[1].padStart(2, '0');
+        const day = slashMatch[2].padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     return '';
 }
 
@@ -3089,13 +2944,102 @@ function clearSecondaryQuoteFields(prefix = '') {
 }
 
 function normalizeAdditionalQuoteEntry(rawQuote = {}) {
+    const groupName = normalizeAs400AutomationGroupName(rawQuote.as400_group || rawQuote.group_name || '');
+    const vendorName = String(rawQuote.vendor || '').trim();
+    const colorName = String(rawQuote.group_color || '').trim();
     return {
         quote_number: String(rawQuote.quote_number || '').trim(),
         quote_date: toInputDate(rawQuote.quote_date),
         quote_total: rawQuote.quote_total === null || rawQuote.quote_total === undefined
             ? ''
             : String(rawQuote.quote_total).trim(),
+        as400_group: groupName,
+        vendor: vendorName,
+        group_color: colorName,
     };
+}
+
+function getAs400ColorForAutomationGroup(groupName) {
+    if (typeof getAs400GroupColor === 'function') {
+        return getAs400GroupColor(groupName);
+    }
+    return '';
+}
+
+function getAutomationGroupNamesForOrder(order = null) {
+    return Array.from(new Set(
+        getLineItemsForAutomation(order || getSelectedOrder() || currentOrder || {})
+            .map(item => getAutomationGroupNameForItem(item))
+            .filter(Boolean)
+    ));
+}
+
+function getAdditionalQuoteLabel(quote, index) {
+    const groupName = normalizeAs400AutomationGroupName(quote?.as400_group || '');
+    return groupName ? `${groupName} Quote` : `Additional Quote ${index + 1}`;
+}
+
+async function ensureAdditionalQuoteForAs400Group(orderId, groupName, lineItems = []) {
+    const normalizedGroup = normalizeAs400AutomationGroupName(groupName);
+    if (!orderId || !normalizedGroup) return null;
+
+    const existingIndex = currentAdditionalQuotes.findIndex(quote => normalizeAs400AutomationGroupName(quote.as400_group) === normalizedGroup);
+    if (existingIndex >= 0) return existingIndex;
+
+    const vendor = String((lineItems || []).find(item => item.vendor)?.vendor || '').trim();
+    currentAdditionalQuotes.push(normalizeAdditionalQuoteEntry({
+        as400_group: normalizedGroup,
+        vendor,
+        group_color: getAs400ColorForAutomationGroup(normalizedGroup),
+    }));
+    syncAdditionalQuotesToHiddenField();
+    syncLegacySecondaryQuoteFieldsFromAdditional('inline');
+    setSecondaryQuoteVisibility('inline', true);
+    await persistAdditionalQuotesState(orderId);
+    refreshQuoteCreatedStageDetails();
+    return currentAdditionalQuotes.length - 1;
+}
+async function ensureAdditionalQuoteRowsForOrderGroups(order = null, options = {}) {
+    if (!order || !order.id) return false;
+    const groupNames = getAutomationGroupNamesForOrder(order);
+    if (groupNames.length <= 1) return false;
+
+    const primaryGroup = normalizeAs400AutomationGroupName(groupNames[0]);
+    const additionalGroupNames = groupNames
+        .map(normalizeAs400AutomationGroupName)
+        .filter(groupName => groupName && groupName !== primaryGroup);
+    const items = getLineItemsForAutomation(order);
+    let changed = false;
+
+    const beforeCount = currentAdditionalQuotes.length;
+    currentAdditionalQuotes = currentAdditionalQuotes.filter(quote => {
+        const quoteGroup = normalizeAs400AutomationGroupName(quote.as400_group);
+        const hasQuoteData = Boolean(quote.quote_number || quote.quote_date || quote.quote_total);
+        return quoteGroup !== primaryGroup || hasQuoteData;
+    });
+    if (currentAdditionalQuotes.length !== beforeCount) changed = true;
+
+    additionalGroupNames.forEach(groupName => {
+        const exists = currentAdditionalQuotes.some(quote => normalizeAs400AutomationGroupName(quote.as400_group) === groupName);
+        if (exists) return;
+        const groupItems = items.filter(item => getAutomationGroupNameForItem(item) === groupName);
+        currentAdditionalQuotes.push(normalizeAdditionalQuoteEntry({
+            as400_group: groupName,
+            vendor: String(groupItems.find(item => item.vendor)?.vendor || '').trim(),
+            group_color: getAs400ColorForAutomationGroup(groupName),
+        }));
+        changed = true;
+    });
+
+    if (!changed) return false;
+    syncAdditionalQuotesToHiddenField();
+    syncLegacySecondaryQuoteFieldsFromAdditional('inline');
+    setSecondaryQuoteVisibility('inline', currentAdditionalQuotes.length > 0);
+    refreshQuoteCreatedStageDetails();
+    if (options.persist !== false) {
+        await persistAdditionalQuotesState(order.id);
+    }
+    return true;
 }
 
 function parseAdditionalQuotesFromOrder(order) {
@@ -3155,6 +3099,296 @@ function loadAdditionalQuotesFromOrder(order) {
     syncAdditionalQuotesToHiddenField();
     syncLegacySecondaryQuoteFieldsFromAdditional('inline');
 }
+function normalizeAdditionalInvoiceEntry(rawInvoice = {}) {
+    const groupName = normalizeAs400AutomationGroupName(rawInvoice.as400_group || rawInvoice.group_name || '');
+    return {
+        invoice_number: String(rawInvoice.invoice_number || '').trim(),
+        invoice_date: toInputDate(rawInvoice.invoice_date),
+        invoice_total: rawInvoice.invoice_total === null || rawInvoice.invoice_total === undefined
+            ? ''
+            : String(rawInvoice.invoice_total).trim(),
+        as400_group: groupName,
+        vendor: String(rawInvoice.vendor || '').trim(),
+        group_color: String(rawInvoice.group_color || '').trim(),
+    };
+}
+
+function parseAdditionalInvoicesFromOrder(order) {
+    let parsed = [];
+    try {
+        if (Array.isArray(order?.additional_invoices)) {
+            parsed = order.additional_invoices;
+        } else if (order?.additional_invoices) {
+            parsed = JSON.parse(order.additional_invoices);
+        }
+    } catch (error) {
+        console.warn('Unable to parse additional_invoices for order', order?.id, error);
+        parsed = [];
+    }
+    return Array.isArray(parsed) ? parsed.map(normalizeAdditionalInvoiceEntry) : [];
+}
+
+function syncAdditionalInvoicesToHiddenField() {
+    const hiddenField = document.getElementById(INLINE_ORDER_FIELDS.additional_invoices);
+    if (!hiddenField) return;
+    hiddenField.value = currentAdditionalInvoices.length > 0
+        ? JSON.stringify(currentAdditionalInvoices)
+        : '';
+}
+
+function getAdditionalInvoiceLabel(invoice, index) {
+    const groupName = normalizeAs400AutomationGroupName(invoice?.as400_group || '');
+    return groupName ? `${groupName} Invoice` : `Additional Invoice ${index + 1}`;
+}
+
+function loadAdditionalInvoicesFromOrder(order) {
+    currentAdditionalInvoices = parseAdditionalInvoicesFromOrder(order);
+    syncAdditionalInvoicesToHiddenField();
+}
+
+async function persistAdditionalInvoicesState(orderId = selectedOrderId) {
+    if (!orderId) return null;
+    const payload = {
+        additional_invoices: currentAdditionalInvoices.length > 0 ? JSON.stringify(currentAdditionalInvoices) : null,
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Failed to save additional invoice');
+            return null;
+        }
+        allOrders = allOrders.map(item => item.id === result.order.id ? result.order : item);
+        if (currentOrder && currentOrder.id === result.order.id) currentOrder = result.order;
+        const selected = getSelectedOrder();
+        if (selected && selected.id === result.order.id) Object.assign(selected, result.order);
+        hideError();
+        return result.order;
+    } catch (error) {
+        console.error('Error saving additional invoice:', error);
+        showError('Failed to save additional invoice');
+        return null;
+    }
+}
+
+async function addAdditionalInvoice() {
+    currentAdditionalInvoices.push(normalizeAdditionalInvoiceEntry());
+    syncAdditionalInvoicesToHiddenField();
+    await persistAdditionalInvoicesState();
+    renderSalesProcess(getSelectedOrder());
+}
+
+async function removeAdditionalInvoice(index) {
+    if (index < 0 || index >= currentAdditionalInvoices.length) return;
+    currentAdditionalInvoices.splice(index, 1);
+    syncAdditionalInvoicesToHiddenField();
+    await persistAdditionalInvoicesState();
+    renderSalesProcess(getSelectedOrder());
+}
+
+function updateAdditionalInvoiceField(index, field, value) {
+    if (!currentAdditionalInvoices[index]) return;
+    currentAdditionalInvoices[index][field] = field === 'invoice_date'
+        ? toInputDate(value)
+        : String(value || '').trim();
+    syncAdditionalInvoicesToHiddenField();
+    persistAdditionalInvoicesState();
+}
+
+async function ensureAdditionalInvoiceRowsForOrderGroups(order = null, options = {}) {
+    if (!order || !order.id) return false;
+    const groupNames = getAutomationGroupNamesForOrder(order).map(normalizeAs400AutomationGroupName).filter(Boolean);
+    if (groupNames.length <= 1) return false;
+
+    const primaryGroup = groupNames[0];
+    const additionalGroupNames = groupNames.filter(groupName => groupName && groupName !== primaryGroup);
+    const items = getLineItemsForAutomation(order);
+    let changed = false;
+
+    const beforeCount = currentAdditionalInvoices.length;
+    currentAdditionalInvoices = currentAdditionalInvoices.filter(invoice => {
+        const invoiceGroup = normalizeAs400AutomationGroupName(invoice.as400_group);
+        const hasInvoiceData = Boolean(invoice.invoice_number || invoice.invoice_date || invoice.invoice_total);
+        return invoiceGroup !== primaryGroup || hasInvoiceData;
+    });
+    if (currentAdditionalInvoices.length !== beforeCount) changed = true;
+
+    additionalGroupNames.forEach(groupName => {
+        const exists = currentAdditionalInvoices.some(invoice => normalizeAs400AutomationGroupName(invoice.as400_group) === groupName);
+        if (exists) return;
+        const groupItems = items.filter(item => getAutomationGroupNameForItem(item) === groupName);
+        currentAdditionalInvoices.push(normalizeAdditionalInvoiceEntry({
+            as400_group: groupName,
+            vendor: String(groupItems.find(item => item.vendor)?.vendor || '').trim(),
+            group_color: getAs400ColorForAutomationGroup(groupName),
+        }));
+        changed = true;
+    });
+
+    if (!changed) return false;
+    syncAdditionalInvoicesToHiddenField();
+    if (options.persist !== false) await persistAdditionalInvoicesState(order.id);
+    return true;
+}
+
+async function ensureAdditionalInvoiceForAs400Group(orderId, groupName, lineItems = []) {
+    const normalizedGroup = normalizeAs400AutomationGroupName(groupName);
+    if (!orderId || !normalizedGroup) return null;
+    const existingIndex = currentAdditionalInvoices.findIndex(invoice => normalizeAs400AutomationGroupName(invoice.as400_group) === normalizedGroup);
+    if (existingIndex >= 0) return existingIndex;
+    currentAdditionalInvoices.push(normalizeAdditionalInvoiceEntry({
+        as400_group: normalizedGroup,
+        vendor: String((lineItems || []).find(item => item.vendor)?.vendor || '').trim(),
+        group_color: getAs400ColorForAutomationGroup(normalizedGroup),
+    }));
+    syncAdditionalInvoicesToHiddenField();
+    await persistAdditionalInvoicesState(orderId);
+    renderSalesProcess(getSelectedOrder());
+    return currentAdditionalInvoices.length - 1;
+}
+const ADDITIONAL_PO_DONE_FIELD_MAP = {
+    po_done: 'po_done_at',
+    order_placed_done: 'order_placed_done_at',
+    ack_received_done: 'ack_received_done_at',
+    eta_confirmed_done: 'eta_confirmed_done_at',
+    ship_ticket_done: 'ship_ticket_done_at',
+    will_call_done: 'will_call_done_at',
+    picked_up_done: 'picked_up_done_at',
+    closed_done: 'closed_done_at',
+};
+
+function normalizeAdditionalPurchaseOrderEntry(rawEntry = {}) {
+    const groupName = normalizeAs400AutomationGroupName(rawEntry.as400_group || rawEntry.group_name || '');
+    return {
+        po_numbers: String(rawEntry.po_numbers || rawEntry.po_number || '').trim(),
+        po_date_signed: toInputDate(rawEntry.po_date_signed),
+        vendor: String(rawEntry.vendor || '').trim(),
+        vendor_ack_number: String(rawEntry.vendor_ack_number || '').trim(),
+        vendor_ack_total: rawEntry.vendor_ack_total === null || rawEntry.vendor_ack_total === undefined ? '' : String(rawEntry.vendor_ack_total).trim(),
+        eta_date: toInputDate(rawEntry.eta_date),
+        as400_group: groupName,
+        group_color: String(rawEntry.group_color || '').trim(),
+        po_done_at: rawEntry.po_done_at || null,
+        order_placed_done_at: rawEntry.order_placed_done_at || null,
+        ack_received_done_at: rawEntry.ack_received_done_at || null,
+        eta_confirmed_done_at: rawEntry.eta_confirmed_done_at || null,
+        ship_ticket_done_at: rawEntry.ship_ticket_done_at || null,
+        will_call_done_at: rawEntry.will_call_done_at || null,
+        picked_up_done_at: rawEntry.picked_up_done_at || null,
+        closed_done_at: rawEntry.closed_done_at || null,
+    };
+}
+
+function parseAdditionalPurchaseOrdersFromOrder(order) {
+    let parsed = [];
+    try {
+        if (Array.isArray(order?.additional_pos)) parsed = order.additional_pos;
+        else if (order?.additional_pos) parsed = JSON.parse(order.additional_pos);
+    } catch (error) {
+        console.warn('Unable to parse additional_pos for order', order?.id, error);
+        parsed = [];
+    }
+    return Array.isArray(parsed) ? parsed.map(normalizeAdditionalPurchaseOrderEntry) : [];
+}
+
+function syncAdditionalPurchaseOrdersToHiddenField() {
+    const hiddenField = document.getElementById(INLINE_ORDER_FIELDS.additional_pos);
+    if (!hiddenField) return;
+    hiddenField.value = currentAdditionalPurchaseOrders.length > 0 ? JSON.stringify(currentAdditionalPurchaseOrders) : '';
+}
+
+function loadAdditionalPurchaseOrdersFromOrder(order) {
+    currentAdditionalPurchaseOrders = parseAdditionalPurchaseOrdersFromOrder(order);
+    syncAdditionalPurchaseOrdersToHiddenField();
+}
+
+async function persistAdditionalPurchaseOrdersState(orderId = selectedOrderId) {
+    if (!orderId) return null;
+    const payload = { additional_pos: currentAdditionalPurchaseOrders.length > 0 ? JSON.stringify(currentAdditionalPurchaseOrders) : null };
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Failed to save additional PO tracking');
+            return null;
+        }
+        allOrders = allOrders.map(item => item.id === result.order.id ? result.order : item);
+        if (currentOrder && currentOrder.id === result.order.id) currentOrder = result.order;
+        const selected = getSelectedOrder();
+        if (selected && selected.id === result.order.id) Object.assign(selected, result.order);
+        return result.order;
+    } catch (error) {
+        console.error('Error saving additional PO tracking:', error);
+        showError('Failed to save additional PO tracking');
+        return null;
+    }
+}
+
+function updateAdditionalPurchaseOrderField(index, field, value) {
+    if (!currentAdditionalPurchaseOrders[index]) return;
+    if (field === 'po_date_signed' || field === 'eta_date') {
+        currentAdditionalPurchaseOrders[index][field] = toInputDate(value);
+    } else if (field === 'vendor_ack_total') {
+        currentAdditionalPurchaseOrders[index][field] = String(value || '').trim();
+    } else {
+        currentAdditionalPurchaseOrders[index][field] = String(value || '').trim();
+    }
+    syncAdditionalPurchaseOrdersToHiddenField();
+    persistAdditionalPurchaseOrdersState();
+}
+
+function updateAdditionalPurchaseOrderDone(index, doneField, checked) {
+    const timestampField = ADDITIONAL_PO_DONE_FIELD_MAP[doneField];
+    if (!timestampField || !currentAdditionalPurchaseOrders[index]) return;
+    currentAdditionalPurchaseOrders[index][timestampField] = checked ? (currentAdditionalPurchaseOrders[index][timestampField] || new Date().toISOString()) : null;
+    syncAdditionalPurchaseOrdersToHiddenField();
+    persistAdditionalPurchaseOrdersState();
+    renderSalesProcess(getSelectedOrder());
+}
+
+async function ensureAdditionalPurchaseOrderRowsForOrderGroups(order = null, options = {}) {
+    if (!order || !order.id) return false;
+    const groupNames = getAutomationGroupNamesForOrder(order).map(normalizeAs400AutomationGroupName).filter(Boolean);
+    if (groupNames.length <= 1) return false;
+    const primaryGroup = groupNames[0];
+    const additionalGroupNames = groupNames.filter(groupName => groupName && groupName !== primaryGroup);
+    const items = getLineItemsForAutomation(order);
+    let changed = false;
+
+    const beforeCount = currentAdditionalPurchaseOrders.length;
+    currentAdditionalPurchaseOrders = currentAdditionalPurchaseOrders.filter(entry => {
+        const entryGroup = normalizeAs400AutomationGroupName(entry.as400_group);
+        const hasData = Boolean(entry.po_numbers || entry.po_date_signed || entry.vendor_ack_number || entry.vendor_ack_total || entry.eta_date || Object.values(ADDITIONAL_PO_DONE_FIELD_MAP).some(doneField => entry[doneField]));
+        return entryGroup !== primaryGroup || hasData;
+    });
+    if (currentAdditionalPurchaseOrders.length !== beforeCount) changed = true;
+
+    additionalGroupNames.forEach(groupName => {
+        const exists = currentAdditionalPurchaseOrders.some(entry => normalizeAs400AutomationGroupName(entry.as400_group) === groupName);
+        if (exists) return;
+        const groupItems = items.filter(item => getAutomationGroupNameForItem(item) === groupName);
+        currentAdditionalPurchaseOrders.push(normalizeAdditionalPurchaseOrderEntry({
+            as400_group: groupName,
+            vendor: String(groupItems.find(item => item.vendor)?.vendor || '').trim(),
+            group_color: getAs400ColorForAutomationGroup(groupName),
+        }));
+        changed = true;
+    });
+
+    if (!changed) return false;
+    syncAdditionalPurchaseOrdersToHiddenField();
+    if (options.persist !== false) await persistAdditionalPurchaseOrdersState(order.id);
+    return true;
+}
 
 async function addAdditionalQuote() {
     currentAdditionalQuotes.push(normalizeAdditionalQuoteEntry());
@@ -3177,21 +3411,14 @@ async function removeAdditionalQuote(index) {
 }
 
 function updateAdditionalQuoteField(index, field, value) {
-    if (!currentAdditionalQuotes[index]) return;
-
-    if (field === 'quote_date') {
-        currentAdditionalQuotes[index][field] = toInputDate(value);
-    } else {
-        currentAdditionalQuotes[index][field] = String(value || '').trim();
-    }
-
+    setAdditionalQuoteFieldValue(index, field, value);
     syncAdditionalQuotesToHiddenField();
     syncLegacySecondaryQuoteFieldsFromAdditional('inline');
     persistAdditionalQuotesState();
 }
 
-async function persistAdditionalQuotesState() {
-    if (!selectedOrderId) return;
+async function persistAdditionalQuotesState(orderId = selectedOrderId) {
+    if (!orderId) return null;
 
     const first = currentAdditionalQuotes[0] || null;
     const payload = {
@@ -3202,7 +3429,7 @@ async function persistAdditionalQuotesState() {
     };
 
     try {
-        const response = await fetch(`${API_BASE}/orders/${selectedOrderId}`, {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -3213,14 +3440,19 @@ async function persistAdditionalQuotesState() {
         const result = await response.json();
         if (!result.success || !result.order) {
             showError(result.error || 'Failed to save additional quote');
-            return;
+            return null;
         }
 
         allOrders = allOrders.map(item => item.id === result.order.id ? result.order : item);
         if (currentOrder && currentOrder.id === result.order.id) {
             currentOrder = result.order;
         }
+        const selected = getSelectedOrder();
+        if (selected && selected.id === result.order.id) {
+            Object.assign(selected, result.order);
+        }
         hideError();
+        return result.order;
     } catch (error) {
         console.error('Error saving additional quote:', error);
         showError('Failed to save additional quote');
@@ -3276,25 +3508,95 @@ function hideSecondaryQuoteFields(prefix = '') {
     }
 }
 
+function extractPhoneFromText(value) {
+    const match = String(value || '').match(/(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/);
+    return match ? match[0].trim() : '';
+}
+
+function removePhoneFromText(value) {
+    return String(value || '')
+        .replace(/(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*[-,;:]\s*$/, '')
+        .trim();
+}
+
+function applyRequiredCustomerFallbacks(data, selectedOrder) {
+    if (!data || !selectedOrder) return data;
+
+    ['customer_name', 'customer_phone', 'project_name', 'stage'].forEach(field => {
+        const currentValue = data[field];
+        const existingValue = selectedOrder[field];
+        if ((currentValue === null || currentValue === undefined || String(currentValue).trim() === '') && existingValue != null && String(existingValue).trim() !== '') {
+            data[field] = existingValue;
+        }
+    });
+
+    if (!data.customer_phone) {
+        data.customer_phone = extractPhoneFromText(data.customer_name || selectedOrder.customer_name || '') || null;
+    }
+
+    return data;
+}
+
+function normalizeCustomerForAutomation(order) {
+    const payload = { ...(order || {}) };
+    const inferredPhone = String(payload.customer_phone || '').trim() || extractPhoneFromText(payload.customer_name || payload.project_name || '');
+    if (inferredPhone) {
+        payload.customer_phone = inferredPhone;
+    }
+
+    if (payload.customer_name && inferredPhone) {
+        const cleanedName = removePhoneFromText(payload.customer_name);
+        if (cleanedName) payload.customer_name = cleanedName;
+    }
+
+    return payload;
+}
 function collectInlineOrderFormData() {
     const data = {};
+    const selectedOrder = getSelectedOrder();
 
     Object.entries(INLINE_ORDER_FIELDS).forEach(([field, elementId]) => {
         const element = document.getElementById(elementId);
         if (!element) return;
 
         const value = element.value.trim();
-        data[field] = value === '' ? null : value;
+        const existingValue = field === 'po_numbers'
+            ? (selectedOrder?.po_numbers ?? selectedOrder?.po_number ?? null)
+            : (selectedOrder ? selectedOrder[field] : null);
+
+        data[field] = value === '' && existingValue != null && String(existingValue).trim() !== ''
+            ? existingValue
+            : (value === '' ? null : value);
     });
 
-    if (data.quote_total) data.quote_total = parseFloat(data.quote_total);
-    if (data.quote_total_2) data.quote_total_2 = parseFloat(data.quote_total_2);
-    if (data.invoice_total) data.invoice_total = parseFloat(data.invoice_total);
-    if (data.vendor_ack_total) data.vendor_ack_total = parseFloat(data.vendor_ack_total);
-    if (data.priority_manual) data.priority_manual = parseInt(data.priority_manual, 10);
+    const quoteStageDetails = processTimeline
+        ? processTimeline.querySelector('[data-stage-details="QUOTE_CREATED"]')
+        : null;
+    if (quoteStageDetails) {
+        ['quote_number', 'quote_date', 'quote_total'].forEach(field => {
+            const stageInput = quoteStageDetails.querySelector(`[data-stage-source-field="${field}"]`);
+            if (!stageInput) return;
+
+            const value = String(stageInput.value || '').trim();
+            data[field] = value === '' ? null : value;
+
+            const inlineInput = document.getElementById(INLINE_ORDER_FIELDS[field]);
+            if (inlineInput) inlineInput.value = value;
+        });
+    }
+
+    Object.assign(data, collectStageDetailDraftPayload());
+    applyRequiredCustomerFallbacks(data, selectedOrder);
+
+    if (data.quote_total != null && data.quote_total !== '') data.quote_total = parseFloat(data.quote_total);
+    if (data.quote_total_2 != null && data.quote_total_2 !== '') data.quote_total_2 = parseFloat(data.quote_total_2);
+    if (data.invoice_total != null && data.invoice_total !== '') data.invoice_total = parseFloat(data.invoice_total);
+    if (data.vendor_ack_total != null && data.vendor_ack_total !== '') data.vendor_ack_total = parseFloat(data.vendor_ack_total);
+    if (data.priority_manual != null && data.priority_manual !== '') data.priority_manual = parseInt(data.priority_manual, 10);
 
     // Inline form is hidden; never let a stale hidden select reset stage.
-    const selectedOrder = getSelectedOrder();
     if (selectedOrder && selectedOrder.stage) {
         data.stage = selectedOrder.stage;
     }
@@ -3306,20 +3608,32 @@ function collectInlineOrderFormData() {
         data.transfer_location = normalizeTransferLocation(transferInput.value) || null;
     }
 
-    data.line_items = currentLineItems.length > 0 ? JSON.stringify(currentLineItems) : null;
+    const changedLineItemsJson = getChangedLineItemsJson();
+    if (changedLineItemsJson !== undefined) {
+        data.line_items = changedLineItemsJson;
+    } else {
+        delete data.line_items;
+    }
 
-    data.additional_quotes = currentAdditionalQuotes.length > 0 ? JSON.stringify(currentAdditionalQuotes) : null;
-    const firstAdditional = currentAdditionalQuotes[0] || null;
-    data.quote_number_2 = firstAdditional ? (firstAdditional.quote_number || null) : null;
-    data.quote_date_2 = firstAdditional ? (firstAdditional.quote_date || null) : null;
-    data.quote_total_2 = firstAdditional && firstAdditional.quote_total !== ''
-        ? parseFloat(firstAdditional.quote_total)
-        : null;
+    attachAdditionalTrackingPayload(data);
+
+    const derivedPrefit = getDerivedPrefitPayload(selectedOrder);
+    Object.entries(derivedPrefit).forEach(([key, value]) => {
+        const hasExplicitValue = Object.prototype.hasOwnProperty.call(data, key)
+            && data[key] !== null
+            && data[key] !== undefined
+            && String(data[key]).trim() !== '';
+        if (!hasExplicitValue) {
+            data[key] = value;
+        }
+    });
 
     return data;
 }
 
 async function saveInlineOrder() {
+    flushActiveEditsBeforeSave();
+
     if (!selectedOrderId) {
         showError('Select an order first, or click New Order to create one.');
         return;
@@ -3353,9 +3667,15 @@ async function saveInlineOrder() {
             return;
         }
 
-        showToast('Order updated');
+        if (Object.prototype.hasOwnProperty.call(data, 'line_items')) {
+            resetLineItemsDirty(data.line_items);
+        }
+        if (result.order) {
+            applyUpdatedOrderLocally(result.order);
+            refreshOrderListAndProcess();
+        }
+        showSaveConfirmation('Order updated');
         hideError();
-        await loadOrders();
     } catch (error) {
         console.error('Error saving inline order:', error);
         showError('Failed to save order');
@@ -3384,6 +3704,7 @@ function createNewOrder(customer = null) {
 // View order details (for editing)
 async function viewOrderDetails(orderId) {
     console.log('View order:', orderId);
+    selectedOrderId = Number(orderId);
     
     try {
         const response = await fetch(`${API_BASE}/orders/${orderId}`);
@@ -3429,7 +3750,7 @@ function showOrderModal(order) {
         'prefit_hinge_top', 'prefit_hinge_middle', 'prefit_hinge_bottom',
         'prefit_hinge_width', 'prefit_hinge_backset', 'prefit_hinge_radius', 'prefit_hinge_prep',
         'prefit_bore_type', 'prefit_bore_single', 'prefit_bore_top', 'prefit_bore_bottom',
-        'prefit_bore_backset', 'prefit_swing', 'prefit_notes'
+        'prefit_bore_backset', 'prefit_bore_diameter', 'prefit_swing', 'prefit_notes'
     ];
     
     fields.forEach(field => {
@@ -3439,6 +3760,10 @@ function showOrderModal(order) {
         let value = order ? (order[field] || '') : '';
         if (field === 'po_numbers') {
             value = order ? (order.po_numbers || order.po_number || '') : '';
+        }
+
+        if (field === 'prefit_thickness' || field === 'prefit_hinge_width' || field === 'prefit_hinge_radius' || field === 'prefit_bore_backset' || field === 'prefit_bore_diameter') {
+            value = normalizePrefitSelectValue(field, value);
         }
 
         if (field.endsWith('_date')) {
@@ -3456,6 +3781,8 @@ function showOrderModal(order) {
 
     const modalPriorityInput = document.getElementById('priority_manual');
     syncPriorityInputWithStage(stageSelect, modalPriorityInput, order?.stage || stageSelect.value);
+
+    loadLineItemsFromOrder(order || {});
 
     loadAdditionalQuotesFromOrder(order || {});
     syncSecondaryQuoteSection('', order);
@@ -3477,11 +3804,10 @@ function showOrderModal(order) {
     if (prefitVentTopCheckbox) prefitVentTopCheckbox.checked = order ? (order.prefit_vent_top === 1) : false;
     if (prefitVentBottomCheckbox) prefitVentBottomCheckbox.checked = order ? (order.prefit_vent_bottom === 1) : false;
     
-    // Show/hide prefit section based on data
-    const hasPrefitData = order && (order.prefit_width || order.prefit_height || order.prefit_thickness || order.prefit_lites);
+    // Keep the prefit section visible so existing orders can be switched to prefit.
     const prefitSection = document.getElementById('prefitSection');
     if (prefitSection) {
-        prefitSection.style.display = (hasPrefitData || needsPrefitCheckbox.checked) ? 'block' : 'none';
+        prefitSection.style.display = 'block';
     }
     
     // Update prefit details visibility
@@ -3528,10 +3854,18 @@ function showOrderModal(order) {
         const openQuoteBtn = document.getElementById('openQuoteBtn');
         const openInvoiceBtn = document.getElementById('openInvoiceBtn');
         const openSpecialOrderBtn = document.getElementById('openSpecialOrderBtn');
-        
-        if (openQuoteBtn) openQuoteBtn.style.display = order.quote_number ? 'inline-block' : 'none';
-        if (openInvoiceBtn) openInvoiceBtn.style.display = order.invoice_number ? 'inline-block' : 'none';
-        if (openSpecialOrderBtn) openSpecialOrderBtn.style.display = order.invoice_number ? 'inline-block' : 'none';
+
+        const openQuoteTarget = resolveOpenActionTarget(order, 'open-quote');
+        const openInvoiceTarget = resolveOpenActionTarget(order, 'open-invoice');
+        const openSpecialTarget = resolveOpenActionTarget(order, 'open-special-order');
+        const invoiceType = String(order.invoice_type || '').toLowerCase();
+
+        if (openQuoteBtn) openQuoteBtn.style.display = openQuoteTarget ? 'inline-block' : 'none';
+        if (openInvoiceBtn) openInvoiceBtn.style.display = openInvoiceTarget ? 'inline-block' : 'none';
+        if (openSpecialOrderBtn) {
+            const isSpecialFlow = invoiceType.includes('special');
+            openSpecialOrderBtn.style.display = (isSpecialFlow && openSpecialTarget) ? 'inline-block' : 'none';
+        }
         
         // Show buttons for existing orders
         document.getElementById('backupOrderBtn').style.display = 'block';
@@ -3571,15 +3905,9 @@ function showOrderModal(order) {
 function togglePrefitDetails() {
     const needsPrefitCheckbox = document.getElementById('needs_prefit');
     const prefitDetails = document.getElementById('prefitDetails');
-    const prefitSection = document.getElementById('prefitSection');
     
     if (needsPrefitCheckbox && prefitDetails) {
         prefitDetails.style.display = needsPrefitCheckbox.checked ? 'block' : 'none';
-    }
-    
-    // Show entire prefit section if checkbox is checked
-    if (prefitSection && needsPrefitCheckbox) {
-        prefitSection.style.display = needsPrefitCheckbox.checked ? 'block' : 'none';
     }
     
     // Trigger autosave if we're editing an existing order
@@ -3611,6 +3939,8 @@ function closeOrderModal() {
 
 // Save order changes
 async function saveOrder() {
+    flushActiveEditsBeforeSave();
+
     try {
         // Collect form data
         const formData = new FormData(orderForm);
@@ -3620,6 +3950,12 @@ async function saveOrder() {
             // Convert empty strings to null for cleaner database
             data[key] = value.trim() === '' ? null : value;
         });
+
+        // Signals to the backend that this payload is a complete, freshly-populated
+        // snapshot of the order edit form (see showOrderModal), so blank fields here
+        // reflect an intentional clear by the user and must be saved as-is, not
+        // silently reverted to the previous value.
+        data._full_form_save = true;
         
         // Add stage done timestamps (only for existing orders)
         if (currentOrder && currentOrder.id) {
@@ -3650,14 +3986,32 @@ async function saveOrder() {
         }
         
         // Convert numeric fields
-        if (data.quote_total) data.quote_total = parseFloat(data.quote_total);
-        if (data.quote_total_2) data.quote_total_2 = parseFloat(data.quote_total_2);
-        if (data.invoice_total) data.invoice_total = parseFloat(data.invoice_total);
-        if (data.vendor_ack_total) data.vendor_ack_total = parseFloat(data.vendor_ack_total);
+        if (data.quote_total != null && data.quote_total !== '') data.quote_total = parseFloat(data.quote_total);
+        if (data.quote_total_2 != null && data.quote_total_2 !== '') data.quote_total_2 = parseFloat(data.quote_total_2);
+        if (data.invoice_total != null && data.invoice_total !== '') data.invoice_total = parseFloat(data.invoice_total);
+        if (data.vendor_ack_total != null && data.vendor_ack_total !== '') data.vendor_ack_total = parseFloat(data.vendor_ack_total);
         if (data.customer_profile_id) {
             const parsedProfileId = parseInt(data.customer_profile_id, 10);
             data.customer_profile_id = Number.isNaN(parsedProfileId) ? null : parsedProfileId;
         }
+
+        ['prefit_thickness', 'prefit_hinge_width', 'prefit_hinge_radius', 'prefit_bore_backset', 'prefit_bore_diameter'].forEach(field => {
+            if (!Object.prototype.hasOwnProperty.call(data, field)) return;
+            data[field] = normalizePrefitSelectValue(field, data[field]);
+        });
+
+        // Normalize prefit checkboxes to numeric flags so they round-trip reliably.
+        const needsPrefitCheckbox = document.getElementById('needs_prefit');
+        const broughtDoorCheckbox = document.getElementById('prefit_customer_brought_door');
+        const ventTopCheckbox = document.getElementById('prefit_vent_top');
+        const ventBottomCheckbox = document.getElementById('prefit_vent_bottom');
+        if (needsPrefitCheckbox) data.needs_prefit = needsPrefitCheckbox.checked ? 1 : 0;
+        if (broughtDoorCheckbox) data.prefit_customer_brought_door = broughtDoorCheckbox.checked ? 1 : 0;
+        if (ventTopCheckbox) data.prefit_vent_top = ventTopCheckbox.checked ? 1 : 0;
+        if (ventBottomCheckbox) data.prefit_vent_bottom = ventBottomCheckbox.checked ? 1 : 0;
+
+        data.additional_invoices = currentAdditionalInvoices.length > 0 ? JSON.stringify(currentAdditionalInvoices) : null;
+        data.additional_pos = currentAdditionalPurchaseOrders.length > 0 ? JSON.stringify(currentAdditionalPurchaseOrders) : null;
 
         if (currentAdditionalQuotes.length > 0) {
             const firstAdditional = currentAdditionalQuotes[0];
@@ -3671,6 +4025,19 @@ async function saveOrder() {
             data.quote_date_2 = null;
             data.quote_total_2 = null;
         }
+
+        const derivedPrefit = getDerivedPrefitPayload(currentOrder || getSelectedOrder());
+
+        // Modal form is source-of-truth for prefit dropdown selections.
+        Object.entries(derivedPrefit).forEach(([key, value]) => {
+            const hasFormValue = Object.prototype.hasOwnProperty.call(data, key)
+                && data[key] !== null
+                && data[key] !== undefined
+                && String(data[key]).trim() !== '';
+            if (!hasFormValue) {
+                data[key] = value;
+            }
+        });
         
         // Determine if creating or updating
         const isCreate = !currentOrder;
@@ -3678,6 +4045,12 @@ async function saveOrder() {
             ? `${API_BASE}/orders` 
             : `${API_BASE}/orders/${currentOrder.id}`;
         const method = isCreate ? 'POST' : 'PUT';
+        const lineItemsJson = isCreate ? getLineItemsJsonForSave() : getChangedLineItemsJson();
+        if (isCreate || lineItemsJson !== undefined) {
+            data.line_items = lineItemsJson;
+        } else {
+            delete data.line_items;
+        }
         
         // Send request
         const response = await fetch(url, {
@@ -3691,9 +4064,19 @@ async function saveOrder() {
         const result = await response.json();
         
         if (result.success) {
-            showToast(isCreate ? 'Order created successfully!' : 'Order updated successfully!');
+            if (Object.prototype.hasOwnProperty.call(data, 'line_items')) {
+                resetLineItemsDirty(data.line_items);
+            }
+            if (result.order) {
+                applyUpdatedOrderLocally(result.order);
+            }
+            showSaveConfirmation(isCreate ? 'Order created successfully!' : 'Order updated successfully!');
             closeOrderModal();
-            loadOrders(); // Refresh the table
+            if (isCreate) {
+                await loadOrders();
+            } else {
+                refreshOrderListAndProcess();
+            }
         } else {
             showError(result.error || 'Failed to save order');
         }
@@ -3926,6 +4309,60 @@ function copyOrderAccountNumber(event, encodedValue) {
     copyCustomerLookupValueFromEncoded(encodedValue, 'account number');
 }
 
+async function editSelectedOrderCustomerNumber(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const order = getSelectedOrder();
+    if (!order || !order.id) {
+        showError('Select an order first');
+        return;
+    }
+
+    const currentValue = String(order.customer_number || '').trim();
+    const nextValue = prompt('Customer Account #:', currentValue);
+    if (nextValue === null) return;
+
+    const customerNumber = nextValue.trim();
+    const PLACEHOLDER_ACCOUNT_NUMBERS = ['na', 'n/a', 'none', 'null', 'n-a'];
+    const isRealAccountNumber = customerNumber && !PLACEHOLDER_ACCOUNT_NUMBERS.includes(customerNumber.toLowerCase());
+
+    try {
+        const response = await fetch(`${API_BASE}/orders/${order.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customer_number: customerNumber || null,
+                has_customer_account: isRealAccountNumber ? 1 : 0,
+            }),
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Failed to update account number');
+            return;
+        }
+
+        allOrders = sortOrdersForList(allOrders.map(item => item.id === order.id ? result.order : item));
+        if (currentOrder && currentOrder.id === order.id) {
+            currentOrder = result.order;
+        }
+
+        const inlineField = document.getElementById(INLINE_ORDER_FIELDS.customer_number);
+        if (inlineField) inlineField.value = result.order.customer_number || '';
+
+        const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
+        renderOrdersTable(activeOrders);
+        renderCompletedOrders(completedOrders);
+        renderSalesProcess(getSelectedOrder());
+        hideError();
+        showToast(customerNumber ? 'Account number updated' : 'Account number cleared');
+    } catch (error) {
+        console.error('Error updating account number:', error);
+        showError('Failed to update account number');
+    }
+}
 async function openCustomerProfileFromLookup(index) {
     const customer = currentLookupCustomers[index];
     if (!customer) return;
@@ -4140,17 +4577,20 @@ function updateOrdersCount(count) {
 
 // Show/hide loading indicator
 function showLoading(show) {
+    if (!loadingIndicator) return;
     loadingIndicator.style.display = show ? 'block' : 'none';
 }
 
 // Show error message
 function showError(message) {
+    if (!errorMessage || !errorText) return;
     errorText.textContent = message;
     errorMessage.style.display = 'block';
 }
 
 // Hide error message
 function hideError() {
+    if (!errorMessage) return;
     errorMessage.style.display = 'none';
 }
 
@@ -4205,6 +4645,39 @@ function showToast(message) {
     }, 3000);
 }
 
+function getSaveTimestampText() {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function showSaveConfirmation(message) {
+    showToast(message);
+
+    const timestampText = getSaveTimestampText();
+    const saveButtons = [
+        document.getElementById('saveInlineOrderBtn'),
+        document.getElementById('saveOrderBtn'),
+    ].filter(Boolean);
+
+    saveButtons.forEach(button => {
+        const baseText = button.dataset.baseText || button.textContent.trim() || 'Save';
+        if (!button.dataset.baseText) {
+            button.dataset.baseText = baseText;
+        }
+
+        button.textContent = `${baseText} • Saved ${timestampText}`;
+        button.title = `Last saved at ${timestampText}`;
+
+        if (button._saveFeedbackTimeout) {
+            clearTimeout(button._saveFeedbackTimeout);
+        }
+
+        button._saveFeedbackTimeout = setTimeout(() => {
+            button.textContent = baseText;
+        }, 6000);
+    });
+}
+
 function showThemedConfirm({ title = 'Confirm Action', message = '', confirmLabel = 'Confirm', confirmClass = 'btn btn-warning' } = {}) {
     if (!confirmDialogModal || !confirmDialogTitle || !confirmDialogMessage || !confirmDialogConfirmBtn) {
         return Promise.resolve(confirm(`${title}\n\n${message}`));
@@ -4252,28 +4725,38 @@ function loadStageDoneCheckboxes(order) {
     updateStageProgressSummary();
 }
 
-function handleStageDoneChange(checkboxId) {
+async function handleStageDoneChange(checkboxId) {
     const checkbox = document.getElementById(checkboxId);
     const timestampSpan = document.getElementById(checkboxId + '_timestamp');
-    
-    if (checkbox && timestampSpan) {
-        if (checkbox.checked) {
-            // Set timestamp to now
-            const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-            timestampSpan.textContent = formatTimestamp(now);
-        } else {
-            // Clear timestamp
-            timestampSpan.textContent = '';
-        }
+    const timestampField = STAGE_DONE_FIELDS[checkboxId];
+    const activeOrderId = currentOrder?.id || selectedOrderId;
 
-        updateStageDoneVisualState(checkbox);
-        updateStageProgressSummary();
-        
-        // Trigger autosave
-        scheduleAutosave();
+    if (!checkbox || !timestampSpan || !timestampField || !activeOrderId) return;
+
+    const timestampValue = checkbox.checked ? new Date().toISOString() : null;
+    timestampSpan.textContent = timestampValue ? formatTimestamp(timestampValue) : '';
+    updateStageDoneVisualState(checkbox);
+    updateStageProgressSummary();
+
+    try {
+        const response = await fetch(`${API_BASE}/orders/${activeOrderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [timestampField]: timestampValue })
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Failed to update stage status');
+            return;
+        }
+        applyUpdatedOrderLocally(result.order);
+        if (currentOrder && currentOrder.id === result.order.id) currentOrder = result.order;
+        hideError();
+    } catch (error) {
+        console.error('Error updating stage status:', error);
+        showError('Failed to update stage status');
     }
 }
-
 function updateStageDoneVisualState(checkbox) {
     if (!checkbox) return;
     const card = checkbox.closest('.stage-done-item');
@@ -4338,24 +4821,15 @@ async function performAutosave() {
         formData.forEach((value, key) => {
             data[key] = value.trim() === '' ? null : value;
         });
-        
-        // Add stage done timestamps
-        for (const [checkboxId, timestampField] of Object.entries(STAGE_DONE_FIELDS)) {
-            const checkbox = document.getElementById(checkboxId);
-            if (checkbox) {
-                if (checkbox.checked) {
-                    const timestampSpan = document.getElementById(checkboxId + '_timestamp');
-                    const timestampText = timestampSpan ? timestampSpan.textContent : '';
-                    if (timestampText) {
-                        // Convert back to ISO format for database
-                        data[timestampField] = convertTimestampToISO(timestampText);
-                    }
-                } else {
-                    data[timestampField] = null;
-                }
-            }
-        }
-        
+
+        const needsPrefitCheckbox = document.getElementById('needs_prefit');
+        const broughtDoorCheckbox = document.getElementById('prefit_customer_brought_door');
+        const ventTopCheckbox = document.getElementById('prefit_vent_top');
+        const ventBottomCheckbox = document.getElementById('prefit_vent_bottom');
+        if (needsPrefitCheckbox) data.needs_prefit = needsPrefitCheckbox.checked ? 1 : 0;
+        if (broughtDoorCheckbox) data.prefit_customer_brought_door = broughtDoorCheckbox.checked ? 1 : 0;
+        if (ventTopCheckbox) data.prefit_vent_top = ventTopCheckbox.checked ? 1 : 0;
+        if (ventBottomCheckbox) data.prefit_vent_bottom = ventBottomCheckbox.checked ? 1 : 0;
         // Send update request
         const response = await fetch(`${API_BASE}/orders/${currentOrder.id}`, {
             method: 'PUT',
@@ -4392,6 +4866,7 @@ function convertTimestampToISO(timestampText) {
 
 // Setup autosave listeners on form inputs
 document.addEventListener('DOMContentLoaded', () => {
+
     // Add autosave to all form inputs
     const formInputs = orderForm.querySelectorAll('input, select, textarea');
     formInputs.forEach(input => {
@@ -4518,15 +4993,15 @@ async function openHistoryDocument(type, documentNumber, event) {
     }
 
     try {
-        const response = await fetch(`${DESKTOP_HELPER_URL}/${endpoint}`, {
+        const result = await callDesktopHelper(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
+            payload,
         });
 
-        const result = await response.json();
+        if (result.unauthorized) {
+            return;
+        }
+
         if (result.success) {
             showToast(`✅ Opening ${label} ${value} in AS400`);
         } else {
@@ -4548,358 +5023,6 @@ async function openOrderFromHistory(orderId) {
 function closeCustomerHistoryModal() {
     if (customerHistoryModal) {
         customerHistoryModal.style.display = 'none';
-    }
-}
-
-// ===== Attachments Functions =====
-
-async function loadAttachments(orderId) {
-    const modalSection = document.getElementById('attachmentsSection');
-    const processSection = document.getElementById('processAttachmentsSection');
-
-    if (!orderId) {
-        if (modalSection) modalSection.style.display = 'none';
-        if (processSection) processSection.style.display = 'none';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/orders/${orderId}/attachments`);
-        const data = await response.json();
-        
-        if (data.success) {
-            renderAttachments(data.attachments);
-            if (modalSection) modalSection.style.display = 'block';
-            if (processSection) processSection.style.display = 'block';
-        } else {
-            console.error('Failed to load attachments:', data.error);
-        }
-    } catch (error) {
-        console.error('Error loading attachments:', error);
-    }
-}
-
-function renderAttachments(attachments) {
-    const containers = [
-        document.getElementById('attachmentsList'),
-        document.getElementById('processAttachmentsList')
-    ].filter(Boolean);
-    const downloadButtons = [
-        document.getElementById('downloadAllBtn'),
-        document.getElementById('processDownloadAllBtn')
-    ].filter(Boolean);
-
-    if (containers.length === 0) {
-        return;
-    }
-    
-    if (!attachments || attachments.length === 0) {
-        containers.forEach(container => {
-            container.innerHTML = '<div class="attachments-empty">No attachments yet</div>';
-        });
-        downloadButtons.forEach(button => {
-            button.style.display = 'none';
-        });
-        return;
-    }
-    
-    // Show download all button if there are attachments
-    downloadButtons.forEach(button => {
-        button.style.display = 'inline-block';
-    });
-
-    const attachmentsMarkup = attachments.map(att => `
-        <div class="attachment-item">
-            <div class="attachment-info">
-                <span class="attachment-icon">${getFileIcon(att.filename)}</span>
-                <span class="attachment-name">${escapeHtml(att.filename)}</span>
-                <span class="attachment-date">${formatDate(att.added_at)}</span>
-            </div>
-            <div class="attachment-actions">
-                <button class="btn-icon" onclick="downloadAttachment(${att.id}, '${escapeHtml(att.filename)}')" title="Download">
-                    ⬇️
-                </button>
-                <button class="btn-icon btn-icon-danger" onclick="deleteAttachment(${att.id})" title="Delete">
-                    🗑️
-                </button>
-            </div>
-        </div>
-    `).join('');
-
-    containers.forEach(container => {
-        container.innerHTML = attachmentsMarkup;
-    });
-}
-
-function getFileIcon(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const icons = {
-        'pdf': '📄',
-        'doc': '📝', 'docx': '📝',
-        'xls': '📊', 'xlsx': '📊',
-        'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
-        'zip': '🗜️', 'rar': '🗜️',
-        'txt': '📃'
-    };
-    return icons[ext] || '📎';
-}
-
-function getActiveOrderContext() {
-    if (currentOrder && currentOrder.id) {
-        return currentOrder;
-    }
-
-    return getSelectedOrder();
-}
-
-function openProcessFilePicker() {
-    const activeOrder = getActiveOrderContext();
-    if (!activeOrder || !activeOrder.id) {
-        showError('Select an order first');
-        return;
-    }
-
-    currentOrder = activeOrder;
-    const processInput = document.getElementById('processFileInput');
-    const fallbackInput = document.getElementById('fileInput');
-    const input = processInput || fallbackInput;
-
-    if (input) {
-        input.click();
-    }
-}
-
-function handleProcessFileSelect(event) {
-    handleFileSelect(event);
-}
-
-async function handleFileSelect(event) {
-    const files = event.target.files;
-    const activeOrder = getActiveOrderContext();
-    if (!files || files.length === 0 || !activeOrder || !activeOrder.id) return;
-
-    currentOrder = activeOrder;
-    
-    for (const file of files) {
-        await uploadFile(file, activeOrder.id);
-    }
-    
-    // Clear the input
-    event.target.value = '';
-}
-
-async function uploadFile(file, orderId) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('section', 'general');
-    
-    try {
-        showToast(`Uploading ${file.name}...`);
-        
-        const response = await fetch(`${API_BASE}/orders/${orderId}/attachments`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast(`${file.name} uploaded successfully!`);
-            loadAttachments(orderId);  // Reload attachments list
-        } else {
-            showError(result.error || 'Upload failed');
-        }
-    } catch (error) {
-        console.error('Error uploading file:', error);
-        showError('Failed to upload file');
-    }
-}
-
-async function downloadAttachment(attachmentId, filename) {
-    try {
-        window.open(`${API_BASE}/attachments/${attachmentId}/download`, '_blank');
-    } catch (error) {
-        console.error('Error downloading file:', error);
-        showError('Failed to download file');
-    }
-}
-
-async function downloadAllAttachments() {
-    const activeOrder = getActiveOrderContext();
-    if (!activeOrder || !activeOrder.id) return;
-    currentOrder = activeOrder;
-    
-    try {
-        showToast('Preparing ZIP file...');
-        window.open(`${API_BASE}/orders/${activeOrder.id}/attachments/download-all`, '_blank');
-    } catch (error) {
-        console.error('Error downloading attachments:', error);
-        showError('Failed to download attachments');
-    }
-}
-
-async function deleteAttachment(attachmentId) {
-    if (!confirm('Delete this attachment?')) return;
-    const activeOrder = getActiveOrderContext();
-    if (!activeOrder || !activeOrder.id) return;
-    currentOrder = activeOrder;
-    
-    try {
-        const response = await fetch(`${API_BASE}/attachments/${attachmentId}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Attachment deleted');
-            loadAttachments(activeOrder.id);  // Reload attachments list
-        } else {
-            showError(result.error || 'Delete failed');
-        }
-    } catch (error) {
-        console.error('Error deleting attachment:', error);
-        showError('Failed to delete attachment');
-    }
-}
-
-// ===== Notes Functions =====
-
-async function loadNotes(orderId) {
-    if (!orderId) {
-        document.getElementById('notesSection').style.display = 'none';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/orders/${orderId}/notes`);
-        const data = await response.json();
-        
-        if (data.success) {
-            renderNotes(data.notes);
-            document.getElementById('notesSection').style.display = 'block';
-        } else {
-            console.error('Failed to load notes:', data.error);
-        }
-    } catch (error) {
-        console.error('Error loading notes:', error);
-    }
-}
-
-function renderNotes(notes) {
-    const container = document.getElementById('notesList');
-    
-    if (!notes || notes.length === 0) {
-        container.innerHTML = '<div class="notes-empty">No notes yet</div>';
-        return;
-    }
-    
-    container.innerHTML = notes.map(note => `
-        <div class="note-item" data-note-id="${note.id}">
-            <div class="note-content">
-                <div class="note-text">${escapeHtml(note.note)}</div>
-                <div class="note-date">${formatDate(note.created_at)}</div>
-            </div>
-            <div class="note-actions">
-                <button class="btn-icon" onclick="editNote(${note.id}, \`${escapeHtml(note.note).replace(/`/g, '\\\\`')}\`)" title="Edit">
-                    ✏️
-                </button>
-                <button class="btn-icon btn-icon-danger" onclick="deleteNote(${note.id})" title="Delete">
-                    🗑️
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-async function addNote() {
-    if (!currentOrder || !currentOrder.id) return;
-    
-    const textarea = document.getElementById('newNoteText');
-    const noteText = textarea.value.trim();
-    
-    if (!noteText) {
-        showError('Please enter a note');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/orders/${currentOrder.id}/notes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ note: noteText })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Note added');
-            textarea.value = '';  // Clear textarea
-            loadNotes(currentOrder.id);  // Reload notes list
-        } else {
-            showError(result.error || 'Failed to add note');
-        }
-    } catch (error) {
-        console.error('Error adding note:', error);
-        showError('Failed to add note');
-    }
-}
-
-async function editNote(noteId, currentText) {
-    const newText = prompt('Edit note:', currentText);
-    
-    if (newText === null) return;  // User cancelled
-    
-    const trimmedText = newText.trim();
-    if (!trimmedText) {
-        showError('Note cannot be empty');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/notes/${noteId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ note: trimmedText })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Note updated');
-            loadNotes(currentOrder.id);  // Reload notes list
-        } else {
-            showError(result.error || 'Failed to update note');
-        }
-    } catch (error) {
-        console.error('Error updating note:', error);
-        showError('Failed to update note');
-    }
-}
-
-async function deleteNote(noteId) {
-    if (!confirm('Delete this note?')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/notes/${noteId}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Note deleted');
-            loadNotes(currentOrder.id);  // Reload notes list
-        } else {
-            showError(result.error || 'Delete failed');
-        }
-    } catch (error) {
-        console.error('Error deleting note:', error);
-        showError('Failed to delete note');
     }
 }
 
@@ -5364,599 +5487,9 @@ async function backupAllOrders() {
     }
 }
 
-// ===== Reminders Functions =====
 
-const remindersModal = document.getElementById('remindersModal');
-const remindersBtn = document.getElementById('remindersBtn');
-let notificationPermission = 'default';
-let reminderCheckInterval = null;
-let lastShownReminderIds = new Set();
-let editingReminderId = null;
-
-// Initialize reminders button listener
-if (remindersBtn) {
-    remindersBtn.addEventListener('click', () => {
-        openRemindersModal();
-    });
-}
-
-// Request notification permission on app load
-function initializeNotifications() {
-    if ('Notification' in window) {
-        if (Notification.permission === 'granted') {
-            notificationPermission = 'granted';
-            console.log('✅ Notifications already permitted');
-        } else if (Notification.permission !== 'denied') {
-            Notification.requestPermission().then(permission => {
-                notificationPermission = permission;
-                if (permission === 'granted') {
-                    console.log('✅ Notifications permission granted');
-                } else {
-                    console.log('⚠️ Notifications permission denied');
-                }
-            });
-        }
-    } else {
-        console.log('⚠️ Browser does not support notifications');
-    }
-}
-
-// Show browser notification
-function showBrowserNotification(title, options = {}) {
-    if ('Notification' in window && notificationPermission === 'granted') {
-        try {
-            new Notification(title, {
-                icon: '⏰',
-                badge: '⏰',
-                ...options
-            });
-        } catch (e) {
-            console.error('Failed to show notification:', e);
-        }
-    }
-}
-
-// Check for due reminders and show notifications
-async function checkDueReminders() {
-    try {
-        const response = await fetch(`${API_BASE}/reminders/due`);
-        const data = await response.json();
-        
-        if (data.success && data.reminders) {
-            for (const reminder of data.reminders) {
-                // Only show each reminder once
-                if (!lastShownReminderIds.has(reminder.id)) {
-                    lastShownReminderIds.add(reminder.id);
-                    
-                    let notificationTitle = `📋 Reminder: ${reminder.title}`;
-                    let notificationBody = '';
-                    
-                    if (reminder.customer_name) {
-                        notificationBody += `Customer: ${reminder.customer_name}\n`;
-                    }
-                    if (reminder.project_name) {
-                        notificationBody += `Project: ${reminder.project_name}\n`;
-                    }
-                    
-                    // Show browser notification
-                    showBrowserNotification(notificationTitle, {
-                        body: notificationBody.trim() || 'This reminder is due',
-                        tag: `reminder-${reminder.id}`,
-                        requireInteraction: true
-                    });
-                    
-                    // Also show visual alert in app
-                    showAlert(`Reminder Due: ${reminder.title}`, 'warning');
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error checking due reminders:', error);
-    }
-}
-
-// Start periodic reminder checking (every 60 seconds)
-function startReminderChecking() {
-    if (reminderCheckInterval) {
-        clearInterval(reminderCheckInterval);
-    }
-    reminderCheckInterval = setInterval(checkDueReminders, 60000);
-    console.log('✅ Reminder checking started (every 60 seconds)');
-}
-
-// Stop reminder checking
-function stopReminderChecking() {
-    if (reminderCheckInterval) {
-        clearInterval(reminderCheckInterval);
-        reminderCheckInterval = null;
-    }
-}
-
-function openRemindersModal() {
-    remindersModal.style.display = 'block';
-    loadReminders();
-}
-
-function closeRemindersModal() {
-    remindersModal.style.display = 'none';
-    cancelAddReminder();
-}
-
-function showAddReminderForm() {
-    document.getElementById('addReminderForm').style.display = 'block';
-    updateReminderFormMode();
-    // Set default date to tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dueDateInput = document.getElementById('reminder_due_date');
-    if (dueDateInput && !dueDateInput.value) {
-        dueDateInput.value = tomorrow.toISOString().split('T')[0];
-    }
-}
-
-function prefillReminderFormForOrder(order, force = false) {
-    if (!order || !order.id) return;
-
-    const titleInput = document.getElementById('reminder_title');
-    const guestInput = document.getElementById('reminder_guest');
-    const orderIdInput = document.getElementById('reminder_order_id');
-
-    const customerName = String(order.customer_name || '').trim();
-    const projectName = String(order.project_name || '').trim();
-    const poRaw = String(order.po_numbers_display || order.po_numbers || order.po_number || '').trim();
-    const firstPo = poRaw ? poRaw.split(/[,\n]/)[0].trim() : '';
-
-    if (orderIdInput) {
-        orderIdInput.value = order.id;
-    }
-
-    if (guestInput && (force || !guestInput.value)) {
-        guestInput.value = customerName || String(order.customer_phone || '').trim();
-    }
-
-    if (titleInput && (force || !titleInput.value)) {
-        const titleParts = [];
-        if (customerName) titleParts.push(customerName);
-        if (projectName) titleParts.push(projectName);
-        if (firstPo) titleParts.push(`PO ${firstPo}`);
-        titleInput.value = titleParts.length > 0
-            ? `Follow up - ${titleParts.join(' - ')}`
-            : `Follow up - Order #${order.id}`;
-    }
-}
-
-function cancelAddReminder() {
-    document.getElementById('addReminderForm').style.display = 'none';
-    editingReminderId = null;
-    updateReminderFormMode();
-    // Clear form
-    document.getElementById('reminder_title').value = '';
-    document.getElementById('reminder_due_date').value = '';
-    document.getElementById('reminder_due_time').value = '09:00';
-    document.getElementById('reminder_repeat').value = '';
-    document.getElementById('reminder_guest').value = '';
-    document.getElementById('reminder_order_id').value = '';
-}
-
-function updateReminderFormMode() {
-    const formTitle = document.getElementById('reminderFormTitle');
-    const saveBtn = document.getElementById('saveReminderBtn');
-
-    if (formTitle) {
-        formTitle.textContent = editingReminderId ? 'Edit Reminder' : 'New Reminder';
-    }
-    if (saveBtn) {
-        saveBtn.textContent = editingReminderId ? 'Update Reminder' : 'Save Reminder';
-    }
-}
-
-function formatDateForInput(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
-function formatTimeForInput(date) {
-    const h = String(date.getHours()).padStart(2, '0');
-    const m = String(date.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
-}
-
-async function editReminder(reminderId) {
-    try {
-        const response = await fetch(`${API_BASE}/reminders/${reminderId}`);
-        const result = await response.json();
-
-        if (!result.success || !result.reminder) {
-            showError(result.error || 'Failed to load reminder');
-            return;
-        }
-
-        const reminder = result.reminder;
-        const dueDate = new Date(reminder.due_at);
-
-        openRemindersModal();
-        showAddReminderForm();
-
-        editingReminderId = reminder.id;
-        updateReminderFormMode();
-
-        document.getElementById('reminder_title').value = reminder.title || '';
-        document.getElementById('reminder_repeat').value = reminder.repeat || '';
-        document.getElementById('reminder_guest').value = reminder.guest || '';
-        document.getElementById('reminder_order_id').value = reminder.order_id || '';
-
-        if (!Number.isNaN(dueDate.getTime())) {
-            document.getElementById('reminder_due_date').value = formatDateForInput(dueDate);
-            document.getElementById('reminder_due_time').value = formatTimeForInput(dueDate);
-        }
-
-        document.getElementById('reminder_title').focus();
-    } catch (error) {
-        console.error('Error loading reminder for edit:', error);
-        showError('Failed to load reminder for edit');
-    }
-}
-
-// Quick add reminder for current order (from order details panel)
-function quickAddReminderForOrder() {
-    const activeOrder = currentOrder || getSelectedOrder();
-    if (!activeOrder || !activeOrder.id) {
-        alert('Please select an order first');
-        return;
-    }
-    
-    openRemindersModal();
-    showAddReminderForm();
-    prefillReminderFormForOrder(activeOrder);
-
-    const saveBtn = document.getElementById('saveReminderBtn');
-    if (saveBtn) {
-        saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    document.getElementById('reminder_title').focus();
-}
-
-// Load and display reminders for current order
-async function loadOrderReminders() {
-    const activeOrder = currentOrder || getSelectedOrder();
-    if (!activeOrder || !activeOrder.id) {
-        const container = document.getElementById('orderRemindersPanel');
-        if (container) {
-            container.innerHTML = `
-                <h3>
-                    ⏰ Reminders for this Order
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="quickAddReminderForOrder()" title="Add reminder for this order">+ Add</button>
-                </h3>
-                <p style="color: #999; font-style: italic;">Select an order to view reminders</p>
-            `;
-        }
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/reminders?order_id=${activeOrder.id}`);
-        const data = await response.json();
-        
-        if (data.success) {
-            displayOrderReminders(data.reminders || []);
-        }
-    } catch (error) {
-        console.error('Error loading order reminders:', error);
-    }
-}
-
-function displayOrderReminders(reminders) {
-    const container = document.getElementById('orderRemindersPanel');
-    if (!container) return;
-    
-    if (!reminders || reminders.length === 0) {
-        container.innerHTML = '<p style="color: #999; font-style: italic;">No reminders for this order</p>';
-        return;
-    }
-    
-    const now = new Date();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    
-    let html = '<div class="order-reminders-list">';
-    
-    for (const reminder of reminders) {
-        const dueDate = new Date(reminder.due_at);
-        const timeUntil = dueDate - now;
-        const isOverdue = timeUntil < 0;
-        const isDueSoon = timeUntil > 0 && timeUntil < oneDayMs;
-        const isCompleted = reminder.done === 1;
-        
-        let statusClass = '';
-        if (isCompleted) statusClass = 'completed';
-        else if (isOverdue) statusClass = 'overdue';
-        else if (isDueSoon) statusClass = 'due-soon';
-        
-        const dueDateStr = formatReminderDate(dueDate);
-        
-        html += `
-            <div class="reminder-item-compact ${statusClass}">
-                <div class="reminder-compact-header">
-                    <span class="reminder-status">${statusClass === 'completed' ? '✓' : '⚠️'}</span>
-                    <span class="reminder-title">${escapeHtml(reminder.title)}</span>
-                </div>
-                <div class="reminder-compact-meta">
-                    <span>📅 ${dueDateStr}</span>
-                    ${reminder.guest ? `<span>👤 ${escapeHtml(reminder.guest)}</span>` : ''}
-                </div>
-                <div class="reminder-compact-actions">
-                    ${!isCompleted ? `<button class="btn-icon" onclick="completeReminder(${reminder.id})" title="Complete">✓</button>` : ''}
-                    <button class="btn-icon" onclick="editReminder(${reminder.id})" title="Edit">✏️</button>
-                    <button class="btn-icon" onclick="deleteReminder(${reminder.id})" title="Delete">🗑️</button>
-                </div>
-            </div>
-        `;
-    }
-    
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-async function saveNewReminder() {
-    const title = document.getElementById('reminder_title').value.trim();
-    const date = document.getElementById('reminder_due_date').value;
-    const time = document.getElementById('reminder_due_time').value;
-    const repeat = document.getElementById('reminder_repeat').value;
-    const guest = document.getElementById('reminder_guest').value.trim();
-    const orderId = document.getElementById('reminder_order_id').value;
-    
-    if (!title) {
-        alert('Please enter a title');
-        return;
-    }
-    
-    if (!date) {
-        alert('Please select a due date');
-        return;
-    }
-    
-    // Combine date and time into ISO format
-    const dueAt = `${date}T${time}:00`;
-    
-    const data = {
-        title: title,
-        due_at: dueAt,
-        repeat: repeat || null,
-        guest: guest || null,
-        order_id: orderId ? parseInt(orderId) : null
-    };
-    
-    try {
-        const isEdit = Boolean(editingReminderId);
-        const url = isEdit ? `${API_BASE}/reminders/${editingReminderId}` : `${API_BASE}/reminders`;
-        const method = isEdit ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-            method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast(isEdit ? 'Reminder updated successfully!' : 'Reminder created successfully!');
-            cancelAddReminder();
-            loadReminders();
-            loadOrderReminders();
-        } else {
-            showError(result.error || 'Failed to create reminder');
-        }
-    } catch (error) {
-        console.error('Error creating reminder:', error);
-        showError('Failed to create reminder');
-    }
-}
-
-async function loadReminders() {
-    const showCompleted = document.getElementById('showCompletedReminders').checked;
-    
-    try {
-        const params = new URLSearchParams();
-        params.append('show_done', showCompleted);
-        
-        const response = await fetch(`${API_BASE}/reminders?${params.toString()}`);
-        const data = await response.json();
-        
-        if (data.success) {
-            renderReminders(data.reminders);
-        } else {
-            showError(data.error || 'Failed to load reminders');
-        }
-    } catch (error) {
-        console.error('Error loading reminders:', error);
-        showError('Failed to load reminders');
-    }
-}
-
-function renderReminders(reminders) {
-    const container = document.getElementById('remindersList');
-    
-    if (!reminders || reminders.length === 0) {
-        container.innerHTML = '<div class="reminders-empty">No reminders yet</div>';
-        return;
-    }
-    
-    const now = new Date();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    
-    container.innerHTML = reminders.map(reminder => {
-        const dueDate = new Date(reminder.due_at);
-        const timeUntil = dueDate - now;
-        const isOverdue = timeUntil < 0;
-        const isDueSoon = timeUntil > 0 && timeUntil < oneDayMs;
-        const isCompleted = reminder.done === 1;
-        
-        let statusClass = '';
-        if (isCompleted) statusClass = 'completed';
-        else if (isOverdue) statusClass = 'overdue';
-        else if (isDueSoon) statusClass = 'due-soon';
-        
-        const dueDateStr = formatReminderDate(dueDate);
-        
-        let infoHtml = `<div class="reminder-due-date">📅 Due: ${dueDateStr}</div>`;
-        
-        if (reminder.guest) {
-            infoHtml += `<div>👤 ${escapeHtml(reminder.guest)}</div>`;
-        }
-        
-        if (reminder.order_id) {
-            const orderInfo = reminder.customer_name || `Order #${reminder.order_id}`;
-            infoHtml += `<div>📋 ${escapeHtml(orderInfo)}</div>`;
-        }
-        
-        if (reminder.repeat) {
-            infoHtml += `<div>🔁 ${reminder.repeat}</div>`;
-        }
-        
-        let actionsHtml = '';
-        if (!isCompleted) {
-            actionsHtml = `
-                <button class="btn btn-sm btn-success" onclick="completeReminder(${reminder.id})">✓ Complete</button>
-                <button class="btn btn-sm btn-secondary" onclick="editReminder(${reminder.id})">✏️ Edit</button>
-                <button class="btn btn-sm btn-secondary" onclick="snoozeReminder(${reminder.id})">💤 Snooze</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteReminder(${reminder.id})">🗑️ Delete</button>
-            `;
-        } else {
-            actionsHtml = `
-                <button class="btn btn-sm btn-secondary" onclick="editReminder(${reminder.id})">✏️ Edit</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteReminder(${reminder.id})">🗑️ Delete</button>
-            `;
-        }
-        
-        return `
-            <div class="reminder-item ${statusClass}">
-                <div class="reminder-header">
-                    <div class="reminder-title">${escapeHtml(reminder.title)}</div>
-                </div>
-                <div class="reminder-info">
-                    ${infoHtml}
-                </div>
-                <div class="reminder-actions-buttons" style="margin-top: 8px;">
-                    ${actionsHtml}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function formatReminderDate(date) {
-    const now = new Date();
-    const dayMs = 1000 * 60 * 60 * 24;
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfDue = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const dayDiff = Math.round((startOfDue - startOfToday) / dayMs);
-    const timeText = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-    // Overdue is based on actual timestamp, but labels use calendar day buckets.
-    if (date < now) {
-        if (dayDiff === 0) {
-            return `Today at ${timeText} (OVERDUE)`;
-        }
-        if (dayDiff === -1) {
-            return `Yesterday at ${timeText} (OVERDUE)`;
-        }
-        return `${Math.abs(dayDiff)} days ago (OVERDUE)`;
-    }
-
-    if (dayDiff === 0) {
-        return `Today at ${timeText}`;
-    }
-    if (dayDiff === 1) {
-        return `Tomorrow at ${timeText}`;
-    }
-    if (dayDiff > 1 && dayDiff < 7) {
-        return `${date.toLocaleDateString('en-US', { weekday: 'long' })} at ${timeText}`;
-    }
-
-    return `${date.toLocaleDateString()} at ${timeText}`;
-}
-
-async function completeReminder(reminderId) {
-    try {
-        const response = await fetch(`${API_BASE}/reminders/${reminderId}/complete`, {
-            method: 'PUT'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Reminder completed!');
-            loadReminders();
-            loadOrderReminders();
-        } else {
-            showError(result.error || 'Failed to complete reminder');
-        }
-    } catch (error) {
-        console.error('Error completing reminder:', error);
-        showError('Failed to complete reminder');
-    }
-}
-
-async function snoozeReminder(reminderId) {
-    const minutes = prompt('Snooze for how many minutes?', '30');
-    if (!minutes) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/reminders/${reminderId}/snooze`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ minutes: parseInt(minutes) })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast(`Reminder snoozed for ${minutes} minutes`);
-            loadReminders();
-            loadOrderReminders();
-        } else {
-            showError(result.error || 'Failed to snooze reminder');
-        }
-    } catch (error) {
-        console.error('Error snoozing reminder:', error);
-        showError('Failed to snooze reminder');
-    }
-}
-
-async function deleteReminder(reminderId) {
-    if (!confirm('Delete this reminder?')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/reminders/${reminderId}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('Reminder deleted');
-            loadReminders();
-            loadOrderReminders();
-        } else {
-            showError(result.error || 'Failed to delete reminder');
-        }
-    } catch (error) {
-        console.error('Error deleting reminder:', error);
-        showError('Failed to delete reminder');
-    }
-}
-
-// Close modals when clicking outside
+// Close modal when clicking outside
 window.addEventListener('click', function(event) {
-    if (event.target === remindersModal) {
-        closeRemindersModal();
-    }
     if (event.target === confirmDialogModal) {
         closeThemedConfirm(false);
     }
@@ -6024,32 +5557,91 @@ async function quickCreateSpecialOrder(orderId) {
     }
 }
 
-// Check if desktop helper is running
-async function checkDesktopHelper() {
+function redirectToLogin() {
+    const nextUrl = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
+}
+
+function setHelperStatusBadge(mode) {
     const statusElement = document.getElementById('helperStatus');
     const statusTextElement = document.getElementById('helperStatusText');
-    
+    if (!statusElement || !statusTextElement) return;
+
+    if (mode === 'available') {
+        statusElement.className = 'helper-status available';
+        statusTextElement.textContent = '🤖 Automation Ready';
+        return;
+    }
+
+    statusElement.className = 'helper-status unavailable';
+    statusTextElement.textContent = mode === 'auth' ? '🔒 Sign In Required' : '⚠️ Manual Mode';
+}
+
+async function callDesktopHelper(endpoint, { method = 'GET', payload = null, timeoutMs = 0 } = {}) {
+    const options = { method };
+
+    if (payload !== null) {
+        options.headers = {
+            'Content-Type': 'application/json',
+        };
+        options.body = JSON.stringify(payload);
+    }
+
+    if (timeoutMs > 0) {
+        options.signal = AbortSignal.timeout(timeoutMs);
+    }
+
+    const response = await fetch(`${DESKTOP_HELPER_URL}/${endpoint}`, options);
+
+    if (response.status === 401) {
+        desktopHelperAvailable = false;
+        setHelperStatusBadge('auth');
+        redirectToLogin();
+        return { success: false, unauthorized: true, error: 'Authentication required' };
+    }
+
+    let result = {};
     try {
-        const response = await fetch(`${DESKTOP_HELPER_URL}/health`, {
+        result = await response.json();
+    } catch (_error) {
+        result = {};
+    }
+
+    if (!response.ok) {
+        return {
+            success: false,
+            status: response.status,
+            error: result.error || `Desktop helper request failed: ${response.status}`,
+        };
+    }
+
+    return result;
+}
+
+// Check if desktop helper is running
+async function checkDesktopHelper() {
+    try {
+        const result = await callDesktopHelper('health', {
             method: 'GET',
-            signal: AbortSignal.timeout(1000) // 1 second timeout
+            timeoutMs: 1000,
         });
-        const result = await response.json();
-        desktopHelperAvailable = result.status === 'running';
-        
-        if (desktopHelperAvailable) {
-            statusElement.className = 'helper-status available';
-            statusTextElement.textContent = '🤖 Automation Ready';
-        } else {
-            statusElement.className = 'helper-status unavailable';
-            statusTextElement.textContent = '⚠️ Manual Mode';
+
+        if (result.unauthorized) {
+            return false;
         }
-        
+
+        desktopHelperAvailable = result.status === 'running';
+
+        if (desktopHelperAvailable) {
+            setHelperStatusBadge('available');
+        } else {
+            setHelperStatusBadge('manual');
+        }
+
         return desktopHelperAvailable;
     } catch (error) {
         desktopHelperAvailable = false;
-        statusElement.className = 'helper-status unavailable';
-        statusTextElement.textContent = '⚠️ Manual Mode';
+        setHelperStatusBadge('manual');
         return false;
     }
 }
@@ -6084,26 +5676,73 @@ function getLineItemsForAutomation(actionOrder) {
     return [];
 }
 
+function normalizeAs400AutomationGroupName(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getAutomationGroupNameForItem(item) {
+    if (typeof getAs400GroupNameForItem === 'function') {
+        return getAs400GroupNameForItem(item);
+    }
+
+    const vendor = normalizeAs400AutomationGroupName(item?.vendor) || 'Ungrouped';
+    const text = [item?.style, item?.door_style, item?.door_type, item?.model, item?.series, item?.description]
+        .map(value => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+        .join(' ');
+    return text.includes('bypass') ? `${vendor} Bypass` : vendor;
+}
+
+function getLineItemsForAutomationGroup(actionOrder, groupName = null) {
+    const lineItems = getLineItemsForAutomation(actionOrder);
+    const normalizedGroup = normalizeAs400AutomationGroupName(groupName);
+    if (!normalizedGroup) return lineItems;
+    return lineItems.filter(item => getAutomationGroupNameForItem(item) === normalizedGroup);
+}
+
+function getAutomationGroupLabel(groupName = null) {
+    const normalizedGroup = normalizeAs400AutomationGroupName(groupName);
+    return normalizedGroup ? ` (${normalizedGroup})` : '';
+}
 function mapLineItemForAs400Automation(item) {
     const quantity = Number.parseInt(item.quantity || '1', 10) || 1;
+    const noCost = Boolean(item.no_cost);
+    const umText = resolveUmForCtrlAltS(item);
+    const vendorSkuText = resolveVendorSkuForCtrlAltS(item);
     const width = String(item.width || '').trim();
     const height = String(item.height || '').trim();
-    const sizeText = String(item.size || '').trim() || (width && height ? `${width} x ${height}` : '');
+    const sizeText = String(item.callout_size || item.size || '').trim() || (width && height ? `${width} x ${height}` : '');
     const operationText = String(item.operation || item.operation_style || item.handing || '').trim();
     const locationText = String(item.location || item.room || '').trim();
-    const descriptionText = String(item.description || '').trim() || [locationText, operationText, sizeText].filter(Boolean).join(' | ');
+    const descriptionText = String(item.description || '').trim() || buildCtrlAltSDescription(item) || [operationText, sizeText].filter(Boolean).join(' ');
+    const bomCommentText = buildBomCommentText(item);
+    const itemTypeText = String(item.type || item.item_type || item.product || '').toLowerCase();
+    const isDoor = itemTypeText.includes('door');
+    const isHardware = itemTypeText.includes('hardware');
+    const isPrefit = Boolean(item.prefit_enabled);
+    const notesText = (!isPrefit)
+        ? buildStandardAs400CommentPreview(item)
+        : [String(item.notes || '').trim(), bomCommentText].filter(Boolean).join(' | ');
+
+    const _priceVal = [item.price, item.unit_price, item.quote_total, item.sale_price, item.line_total]
+        .find(v => v != null && v !== '');
+    const priceText = String(_priceVal ?? '').trim();
 
     return {
         ...item,
         item_type: item.type || item.item_type || item.product || '',
         type: item.type || item.item_type || item.product || '',
-        product: item.product || (String(item.type || '').toLowerCase().includes('window') ? 'Window' : 'Door'),
+        product: item.product || (isHardware ? 'Hardware' : (String(item.type || '').toLowerCase().includes('window') ? 'Window' : 'Door')),
         handing: operationText,
         operation: operationText,
         operation_style: operationText,
         location: locationText,
         room: item.room || locationText,
-        description: descriptionText,
+        description: isHardware ? [item.hardware_product_code, item.hardware_lever_knob_style, item.hardware_finish_code || item.hardware_finish, item.hardware_handing].filter(Boolean).join(' ') : descriptionText,
+        notes: notesText,
+        as400_comment: notesText,
+        as400_comment_authoritative: true,
+        callout_size: String(item.callout_size || '').trim(),
         size: sizeText,
         model: item.model || item.series || item.style || '',
         series: item.series || item.style || '',
@@ -6111,25 +5750,190 @@ function mapLineItemForAs400Automation(item) {
         width,
         height,
         quantity,
-        vendor_sku: item.vendor_sku || item.sku || '',
-        sku: item.sku || item.vendor_sku || '',
-        unit_price: item.unit_price || item.price || '',
-        price: item.price || item.unit_price || ''
+        no_cost: noCost,
+        um: umText,
+        vendor_sku: vendorSkuText,
+        vendorSku: vendorSkuText,
+        sku: vendorSkuText,
+        unit_price: [item.unit_price, item.price, item.quote_total, item.sale_price, item.line_total].find(v => v != null && v !== '') ?? '',
+        price: priceText
     };
 }
 
-async function createQuote() {
-    const actionOrder = currentOrder && currentOrder.id ? currentOrder : getSelectedOrder();
+function getPrimaryAs400GroupName(order = null) {
+    return getAutomationGroupNamesForOrder(order || getSelectedOrder() || currentOrder || {})
+        .map(normalizeAs400AutomationGroupName)
+        .filter(Boolean)[0] || '';
+}
+
+function getQuoteNumberForAs400Group(order, groupName = null) {
+    const normalizedGroup = normalizeAs400AutomationGroupName(groupName);
+    const primaryGroup = getPrimaryAs400GroupName(order);
+    if (!normalizedGroup || normalizedGroup === primaryGroup) {
+        return String(order?.quote_number || '').trim();
+    }
+    const quote = currentAdditionalQuotes.find(item => normalizeAs400AutomationGroupName(item.as400_group) === normalizedGroup);
+    return String(quote?.quote_number || '').trim();
+}
+
+async function persistCapturedInvoiceFields(orderId, capturedFields, options = {}) {
+    if (!orderId || !capturedFields || Object.keys(capturedFields).length === 0) return null;
+
+    if (Number.isInteger(options.additionalInvoiceIndex) && options.additionalInvoiceIndex >= 0) {
+        const index = options.additionalInvoiceIndex;
+        currentAdditionalInvoices[index] = normalizeAdditionalInvoiceEntry({
+            ...(currentAdditionalInvoices[index] || {}),
+            ...capturedFields,
+            as400_group: options.as400_group || currentAdditionalInvoices[index]?.as400_group || '',
+            vendor: options.vendor || currentAdditionalInvoices[index]?.vendor || '',
+            group_color: options.group_color || currentAdditionalInvoices[index]?.group_color || '',
+        });
+        syncAdditionalInvoicesToHiddenField();
+        const savedOrder = await persistAdditionalInvoicesState(orderId);
+        if (savedOrder) {
+            ['invoice_number', 'invoice_date', 'invoice_total'].forEach(field => {
+                const element = document.getElementById(`stage_additional_${field}_${index}`);
+                if (element) element.value = field === 'invoice_date' ? (toInputDate(capturedFields[field]) || '') : (capturedFields[field] ?? '');
+            });
+            renderSalesProcess(getSelectedOrder());
+            return savedOrder;
+        }
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(capturedFields),
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Invoice was created, but invoice details did not save');
+            return null;
+        }
+        allOrders = sortOrdersForList(allOrders.map(order => order.id === orderId ? result.order : order));
+        if (currentOrder && currentOrder.id === orderId) currentOrder = result.order;
+        const selected = getSelectedOrder();
+        if (selected && selected.id === orderId) Object.assign(selected, result.order);
+
+        const fieldIds = {
+            invoice_number: ['inline_invoice_number', 'stage_field_INVOICE_CREATED_invoice_number'],
+            invoice_date: ['inline_invoice_date', 'stage_field_INVOICE_CREATED_invoice_date'],
+            invoice_total: ['inline_invoice_total', 'stage_field_INVOICE_CREATED_invoice_total'],
+        };
+        Object.entries(capturedFields).forEach(([field, value]) => {
+            (fieldIds[field] || []).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = field === 'invoice_date' ? (toInputDate(value) || '') : (value ?? '');
+            });
+        });
+        return result.order;
+    } catch (error) {
+        console.error('Error saving captured invoice fields:', error);
+        showError('Invoice was created, but invoice details did not save');
+        return null;
+    }
+}
+async function persistCapturedQuoteFields(orderId, capturedFields, options = {}) {
+    if (!orderId || !capturedFields || Object.keys(capturedFields).length === 0) return null;
+
+    if (Number.isInteger(options.additionalQuoteIndex) && options.additionalQuoteIndex >= 0) {
+        const index = options.additionalQuoteIndex;
+        currentAdditionalQuotes[index] = normalizeAdditionalQuoteEntry({
+            ...(currentAdditionalQuotes[index] || {}),
+            ...capturedFields,
+            as400_group: options.as400_group || currentAdditionalQuotes[index]?.as400_group || '',
+            vendor: options.vendor || currentAdditionalQuotes[index]?.vendor || '',
+            group_color: options.group_color || currentAdditionalQuotes[index]?.group_color || '',
+        });
+        syncAdditionalQuotesToHiddenField();
+        syncLegacySecondaryQuoteFieldsFromAdditional('inline');
+        const savedOrder = await persistAdditionalQuotesState(orderId);
+        if (savedOrder) {
+            ['quote_number', 'quote_date', 'quote_total'].forEach(field => {
+                const element = document.getElementById(`stage_additional_${field}_${index}`);
+                if (element) element.value = field === 'quote_date' ? (toInputDate(capturedFields[field]) || '') : (capturedFields[field] ?? '');
+            });
+            refreshQuoteCreatedStageDetails();
+            return savedOrder;
+        }
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(capturedFields)
+        });
+        const result = await response.json();
+        if (!result.success || !result.order) {
+            showError(result.error || 'Quote was created, but quote details did not save');
+            return null;
+        }
+
+        allOrders = sortOrdersForList(allOrders.map(order => order.id === orderId ? result.order : order));
+        if (currentOrder && currentOrder.id === orderId) {
+            currentOrder = result.order;
+        }
+
+        const selected = getSelectedOrder();
+        if (selected && selected.id === orderId) {
+            Object.assign(selected, result.order);
+        }
+
+        const fieldIds = {
+            quote_number: ['inline_quote_number', 'stage_field_QUOTE_CREATED_quote_number'],
+            quote_date: ['inline_quote_date', 'stage_field_QUOTE_CREATED_quote_date'],
+            quote_total: ['inline_quote_total', 'stage_field_QUOTE_CREATED_quote_total']
+        };
+
+        Object.entries(capturedFields).forEach(([field, value]) => {
+            (fieldIds[field] || []).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = field === 'quote_date' ? (toInputDate(value) || '') : (value ?? '');
+            });
+        });
+
+        return result.order;
+    } catch (error) {
+        console.error('Error saving captured quote fields:', error);
+        showError('Quote was created, but quote details did not save');
+        return null;
+    }
+}
+async function createQuote(groupName = null) {
+    flushActiveEditsBeforeSave();
+
+    const actionOrder = getSelectedOrder() || (currentOrder && currentOrder.id ? currentOrder : null);
     if (!actionOrder || !actionOrder.id) {
         alert('No order selected');
         return;
     }
 
+    const currentFormData = selectedOrderId === actionOrder.id ? collectInlineOrderFormData() : {};
+    Object.assign(actionOrder, currentFormData);
+    const automationOrder = normalizeCustomerForAutomation(actionOrder);
+
     // Keep currentOrder in sync so existing helper paths continue to work.
     currentOrder = actionOrder;
 
-    const lineItemsForAutomation = getLineItemsForAutomation(actionOrder).map(mapLineItemForAs400Automation);
-    const fallbackVendorSku = lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '';
+    const groupLabel = getAutomationGroupLabel(groupName);
+    const sourceLineItems = getLineItemsForAutomationGroup(automationOrder, groupName);
+    if (groupName && sourceLineItems.length === 0) {
+        showError('No line items found for ' + groupName);
+        return;
+    }
+    const normalizedGroupName = normalizeAs400AutomationGroupName(groupName);
+    const orderGroupNames = getAutomationGroupNamesForOrder(automationOrder).map(normalizeAs400AutomationGroupName).filter(Boolean);
+    const primaryGroupName = orderGroupNames[0] || '';
+    const groupedQuoteIndex = normalizedGroupName && orderGroupNames.length > 1 && normalizedGroupName !== primaryGroupName
+        ? await ensureAdditionalQuoteForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
+        : null;
+    const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
+    const fallbackVendorSku = lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || automationOrder.vendor_sku || '';
+    const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || automationOrder.vendor || '';
     
     // Check if desktop helper is available
     const helperAvailable = await checkDesktopHelper();
@@ -6137,57 +5941,76 @@ async function createQuote() {
     if (helperAvailable) {
         // Use desktop helper for full automation
         try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/launch-quote`, {
+            const result = await callDesktopHelper('launch-quote', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
+                payload: {
                     order_id: actionOrder.id,  // Include order ID for auto-update
-                    customer_name: actionOrder.customer_name,
-                    customer_phone: actionOrder.customer_phone,
-                    customer_email: actionOrder.customer_email,
-                    project_name: actionOrder.project_name,
-                    quote_number: actionOrder.quote_number,
+                    customer_name: automationOrder.customer_name,
+                    customer_phone: automationOrder.customer_phone,
+                    customer_email: automationOrder.customer_email,
+                    project_name: automationOrder.project_name,
+                    vendor: groupVendor,
+                    quote_number: automationOrder.quote_number,
                     size: actionOrder.size || '',
                     jamb: actionOrder.jamb || '',
                     color: actionOrder.color || '',
-                    customer_number: actionOrder.customer_number,
-                    has_customer_account: actionOrder.has_customer_account,
+                    customer_number: automationOrder.customer_number,
+                    has_customer_account: automationOrder.has_customer_account,
                     line_items: lineItemsForAutomation,
+                    as400_group: normalizedGroupName,
                     vendor_sku: fallbackVendorSku,
-                    needs_prefit: actionOrder.needs_prefit,
-                    prefit_meta: actionOrder.prefit_width ? {
-                        rough_opening: `${actionOrder.prefit_width} x ${actionOrder.prefit_height}`,
-                        thickness: actionOrder.prefit_thickness,
-                        hc_sc: actionOrder.prefit_hinge_radius === 'Square' ? 'SC' : 'HC',
-                        door_cfg: actionOrder.door_configuration?.toLowerCase().includes('slab') ? 'Slab' : 'PH'
+                    needs_prefit: automationOrder.needs_prefit,
+                    prefit_meta: automationOrder.prefit_width ? {
+                        rough_opening: `${automationOrder.prefit_width} x ${automationOrder.prefit_height}`,
+                        thickness: automationOrder.prefit_thickness,
+                        hc_sc: automationOrder.prefit_hinge_radius === 'Square' ? 'SC' : 'HC',
+                        door_cfg: automationOrder.door_configuration?.toLowerCase().includes('slab') ? 'Slab' : 'PH'
                     } : null
-                })
+                }
             });
-            
-            const result = await response.json();
+
+            if (result.unauthorized) {
+                return;
+            }
             
             if (result.success) {
-                let message = `✅ AS400 Quote launched for ${actionOrder.customer_name}`;
-                
-                // Check if quote number was automatically captured
+                let message = `AS400 Quote launched for ${actionOrder.customer_name}${groupLabel}`;
+                const capturedQuoteFields = {};
+
                 if (result.captured_quote_number) {
-                    message += `\n📋 Quote Number: ${result.captured_quote_number}`;
-                    
-                    // Update the current order with the captured quote number
-                    actionOrder.quote_number = result.captured_quote_number;
-                    
-                    // Update the form field if it's visible
-                    const quoteField = document.getElementById('quote-number');
-                    if (quoteField) {
-                        quoteField.value = result.captured_quote_number;
-                    }
-                    
-                    // Refresh the orders table to show the updated quote number
-                    await loadOrders();
+                    capturedQuoteFields.quote_number = String(result.captured_quote_number).trim();
+                    message += `\nQuote Number: ${capturedQuoteFields.quote_number}`;
                 }
-                
+
+                if (result.captured_quote_total !== null && result.captured_quote_total !== undefined && result.captured_quote_total !== '') {
+                    const quoteTotalValue = Number(result.captured_quote_total);
+                    if (Number.isFinite(quoteTotalValue)) {
+                        capturedQuoteFields.quote_total = quoteTotalValue;
+                        message += `\nQuote Total: ${quoteTotalValue.toFixed(2)}`;
+                    }
+                }
+
+                if (result.captured_quote_date) {
+                    capturedQuoteFields.quote_date = toInputDate(result.captured_quote_date) || String(result.captured_quote_date).trim();
+                    message += `\nQuote Date: ${capturedQuoteFields.quote_date}`;
+                }
+
+                if (Object.keys(capturedQuoteFields).length > 0) {
+                    const savedOrder = await persistCapturedQuoteFields(actionOrder.id, capturedQuoteFields, Number.isInteger(groupedQuoteIndex) ? {
+                        additionalQuoteIndex: groupedQuoteIndex,
+                        as400_group: normalizedGroupName,
+                        vendor: groupVendor,
+                        group_color: getAs400ColorForAutomationGroup(normalizedGroupName),
+                    } : {});
+                    if (savedOrder) {
+                        Object.assign(actionOrder, savedOrder);
+                        const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
+                        renderOrdersTable(activeOrders);
+                        renderCompletedOrders(completedOrders);
+                        renderSalesProcess(getSelectedOrder());
+                    }
+                }
+
                 showToast(message);
             } else {
                 showError(result.error || 'Failed to launch quote automation');
@@ -6233,7 +6056,8 @@ async function createQuote() {
     }
 }
 
-async function createInvoice() {
+async function createInvoice(groupName = null) {
+    flushActiveEditsBeforeSave();
     // Always prefer the currently selected row to avoid launching automation
     // with stale in-memory order data.
     const actionOrder = getSelectedOrder() || (currentOrder && currentOrder.id ? currentOrder : null);
@@ -6244,41 +6068,99 @@ async function createInvoice() {
 
     currentOrder = actionOrder;
 
-    const lineItemsForAutomation = getLineItemsForAutomation(actionOrder).map(mapLineItemForAs400Automation);
+    commitAllLineItemControls();
+
+    const groupLabel = getAutomationGroupLabel(groupName);
+    const sourceLineItems = getLineItemsForAutomationGroup(actionOrder, groupName);
+    if (groupName && sourceLineItems.length === 0) {
+        showError('No line items found for ' + groupName);
+        return;
+    }
+    const normalizedGroupName = normalizeAs400AutomationGroupName(groupName);
+    const orderGroupNames = getAutomationGroupNamesForOrder(actionOrder).map(normalizeAs400AutomationGroupName).filter(Boolean);
+    const primaryGroupName = orderGroupNames[0] || '';
+    const groupedInvoiceIndex = normalizedGroupName && orderGroupNames.length > 1 && normalizedGroupName !== primaryGroupName
+        ? await ensureAdditionalInvoiceForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
+        : null;
+    const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
     const fallbackVendorSku = lineItemsForAutomation.find(item => item?.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '';
+    const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || actionOrder.vendor || '';
+    const groupQuoteNumber = getQuoteNumberForAs400Group(actionOrder, normalizedGroupName) || actionOrder.quote_number || '';
+    const groupInvoiceNumber = Number.isInteger(groupedInvoiceIndex)
+        ? (currentAdditionalInvoices[groupedInvoiceIndex]?.invoice_number || '')
+        : (actionOrder.invoice_number || '');
     
     const helperAvailable = await checkDesktopHelper();
     
     if (helperAvailable) {
         // Use desktop helper for full automation
         try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/launch-invoice`, {
+            const result = await callDesktopHelper('launch-invoice', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
+                payload: {
                     order_id: actionOrder.id,
                     stage: actionOrder.stage,
                     customer_name: actionOrder.customer_name,
                     customer_phone: actionOrder.customer_phone,
                     project_name: actionOrder.project_name,
-                    invoice_number: actionOrder.invoice_number,
-                    quote_number: actionOrder.quote_number,
+                    vendor: groupVendor,
+                    invoice_number: groupInvoiceNumber,
+                    quote_number: groupQuoteNumber,
                     customer_number: actionOrder.customer_number,
                     has_customer_account: actionOrder.has_customer_account,
                     line_items: lineItemsForAutomation,
+                    as400_group: normalizedGroupName,
                     vendor_sku: fallbackVendorSku,
                     size: actionOrder.size || '',
                     jamb: actionOrder.jamb || '',
                     color: actionOrder.color || ''
-                })
+                }
             });
-            
-            const result = await response.json();
+
+            if (result.unauthorized) {
+                return;
+            }
             
             if (result.success) {
-                showToast(`✅ AS400 Invoice launched for ${actionOrder.customer_name}`);
+                let message = `AS400 Invoice launched for ${actionOrder.customer_name}${groupLabel}`;
+
+                const capturedInvoiceFields = {};
+
+                if (result.captured_invoice_number) {
+                    capturedInvoiceFields.invoice_number = String(result.captured_invoice_number).trim();
+                    message += `\nInvoice Number: ${capturedInvoiceFields.invoice_number}`;
+                }
+
+                if (result.captured_invoice_total !== null && result.captured_invoice_total !== undefined && result.captured_invoice_total !== '') {
+                    const invoiceTotalValue = Number(result.captured_invoice_total);
+                    if (Number.isFinite(invoiceTotalValue)) {
+                        capturedInvoiceFields.invoice_total = invoiceTotalValue;
+                        message += `\nInvoice Total: $${invoiceTotalValue.toFixed(2)}`;
+                    }
+                }
+
+                if (result.captured_invoice_date) {
+                    capturedInvoiceFields.invoice_date = toInputDate(result.captured_invoice_date) || String(result.captured_invoice_date).trim();
+                    message += `\nInvoice Date: ${capturedInvoiceFields.invoice_date}`;
+                }
+
+                if (Object.keys(capturedInvoiceFields).length > 0) {
+                    const savedOrder = await persistCapturedInvoiceFields(actionOrder.id, capturedInvoiceFields, Number.isInteger(groupedInvoiceIndex) ? {
+                        additionalInvoiceIndex: groupedInvoiceIndex,
+                        as400_group: normalizedGroupName,
+                        vendor: groupVendor,
+                        group_color: getAs400ColorForAutomationGroup(normalizedGroupName),
+                    } : {});
+                    if (savedOrder) {
+                        Object.assign(actionOrder, savedOrder);
+                        const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
+                        renderOrdersTable(activeOrders);
+                        renderCompletedOrders(completedOrders);
+                        renderSalesProcess(getSelectedOrder());
+                    }
+                }
+
+                showToast(message);
             } else {
                 showError(result.error || 'Failed to launch invoice automation');
             }
@@ -6323,39 +6205,80 @@ async function createInvoice() {
     }
 }
 
-async function createSpecialOrder() {
-    const actionOrder = currentOrder && currentOrder.id ? currentOrder : getSelectedOrder();
+async function createSpecialOrder(groupName = null) {
+    const actionOrder = getSelectedOrder() || (currentOrder && currentOrder.id ? currentOrder : null);
     if (!actionOrder || !actionOrder.id) {
         alert('No order selected');
         return;
     }
 
     currentOrder = actionOrder;
+    commitAllLineItemControls();
     
+    const groupLabel = getAutomationGroupLabel(groupName);
+    const sourceLineItems = getLineItemsForAutomationGroup(actionOrder, groupName);
+    if (groupName && sourceLineItems.length === 0) {
+        showError('No line items found for ' + groupName);
+        return;
+    }
+    const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
+    const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || actionOrder.vendor || '';
+
     const helperAvailable = await checkDesktopHelper();
     const specialOrderSourceNumber = (actionOrder.quote_number || actionOrder.invoice_number || '').trim();
     
     if (helperAvailable) {
         // Use desktop helper for full automation
         try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/launch-special-order`, {
+            const result = await callDesktopHelper('launch-special-order', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
+                payload: {
+                    order_id: actionOrder.id,
                     customer_name: actionOrder.customer_name,
                     customer_phone: actionOrder.customer_phone,
                     project_name: actionOrder.project_name,
+                    vendor: groupVendor,
                     quote_number: specialOrderSourceNumber,
-                    invoice_number: actionOrder.invoice_number
-                })
+                    invoice_number: actionOrder.invoice_number,
+                    line_items: lineItemsForAutomation,
+                    as400_group: normalizeAs400AutomationGroupName(groupName)
+                }
             });
-            
-            const result = await response.json();
+
+            if (result.unauthorized) {
+                return;
+            }
             
             if (result.success) {
-                showToast(`✅ AS400 Special Order launched for ${actionOrder.customer_name}`);
+                let message = `AS400 Special Order launched for ${actionOrder.customer_name}${groupLabel}`;
+
+                if (result.captured_special_order_number) {
+                    message += `\nSpecial Order Number: ${result.captured_special_order_number}`;
+                    actionOrder.invoice_number = result.captured_special_order_number;
+                }
+
+                if (result.captured_special_order_total !== null && result.captured_special_order_total !== undefined && result.captured_special_order_total !== '') {
+                    const specialOrderTotalValue = Number(result.captured_special_order_total);
+                    if (Number.isFinite(specialOrderTotalValue)) {
+                        message += `\nSpecial Order Total: $${specialOrderTotalValue.toFixed(2)}`;
+                        actionOrder.invoice_total = specialOrderTotalValue;
+                    }
+                }
+
+                if (result.captured_special_order_date) {
+                    message += `\nSpecial Order Date: ${result.captured_special_order_date}`;
+                    actionOrder.invoice_date = result.captured_special_order_date;
+                }
+
+                if (result.captured_special_order_number || result.captured_special_order_total !== null && result.captured_special_order_total !== undefined) {
+                    actionOrder.stage = 'INVOICE_CREATED';
+                }
+
+                if (result.captured_special_order_number || result.captured_special_order_total !== null && result.captured_special_order_total !== undefined) {
+                    await loadOrders();
+                }
+
+                showToast(message);
             } else {
                 showError(result.error || 'Failed to launch special order automation');
             }
@@ -6402,139 +6325,412 @@ async function createSpecialOrder() {
 
 // ===== Open Existing Quote/Invoice/Special Order Functions =====
 
-async function openQuote() {
-    const actionOrder = getSelectedOrder();
+function resolveOpenActionTarget(order, preferredAction = null) {
+    if (!order) return null;
+
+    const quoteNumber = String(order.quote_number || '').trim();
+    const invoiceNumber = String(order.invoice_number || '').trim();
+    const poSource = String(order.po_numbers || order.po_number || '').trim();
+    const firstPoNumber = poSource
+        ? poSource.split(',').map(token => token.trim()).filter(Boolean)[0] || ''
+        : '';
+    const specialOrderNumber = String(order.order_number || firstPoNumber || invoiceNumber || '').trim();
+    const invoiceType = String(order.invoice_type || '').trim().toLowerCase();
+
+    const buildTarget = (action, value) => {
+        const number = String(value || '').trim();
+        if (!number) return null;
+        if (action === 'open-quote') {
+            return { action, payload: { quote_number: number }, label: `quote ${number}` };
+        }
+        if (action === 'open-invoice') {
+            return { action, payload: { invoice_number: number }, label: `invoice ${number}` };
+        }
+        if (action === 'open-special-order') {
+            return { action, payload: { order_number: number }, label: `special order ${number}` };
+        }
+        return null;
+    };
+
+    if (preferredAction === 'open-quote') {
+        return buildTarget('open-quote', quoteNumber);
+    }
+    if (preferredAction === 'open-invoice') {
+        return buildTarget('open-invoice', invoiceNumber);
+    }
+    if (preferredAction === 'open-special-order') {
+        return buildTarget('open-special-order', specialOrderNumber);
+    }
+
+    if (invoiceType.includes('special')) {
+        return buildTarget('open-special-order', specialOrderNumber) || buildTarget('open-quote', quoteNumber);
+    }
+
+    if (invoiceType.includes('charge') || invoiceType.includes('cash') || invoiceType.includes('sale')) {
+        return buildTarget('open-invoice', invoiceNumber) || buildTarget('open-quote', quoteNumber);
+    }
+
+    return buildTarget('open-quote', quoteNumber) || buildTarget('open-invoice', invoiceNumber);
+}
+
+async function openOrderViaDesktopHelper(preferredAction = null) {
+    const actionOrder = getSelectedOrder() || (currentOrder && currentOrder.id ? currentOrder : null);
     if (!actionOrder || !actionOrder.id) {
         alert('Please select an order first');
         return;
     }
 
-    if (!actionOrder || !actionOrder.quote_number) {
-        alert('No quote number found for this order');
+    const target = resolveOpenActionTarget(actionOrder, preferredAction) || resolveOpenActionTarget(actionOrder, null);
+    if (!target) {
+        alert('No quote or invoice number found for this order');
         return;
     }
 
     const helperAvailable = await checkDesktopHelper();
-    
-    if (helperAvailable) {
-        try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/open-quote`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    quote_number: actionOrder.quote_number
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                showToast(`✅ Opening quote ${actionOrder.quote_number} in AS400`);
-            } else {
-                showError(result.error || 'Failed to open quote');
-            }
-        } catch (error) {
-            console.error('Error calling desktop helper:', error);
-            showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
-        }
-    } else {
-        showError('Desktop helper service not available. Cannot open quote automatically.');
+    if (!helperAvailable) {
+        showError('Desktop helper service not available. Cannot open order automatically.');
+        return;
     }
+
+    try {
+        const result = await callDesktopHelper(target.action, {
+            method: 'POST',
+            payload: target.payload,
+        });
+
+        if (result.unauthorized) {
+            return;
+        }
+
+        if (result.success) {
+            showToast(`✅ Opening ${target.label} in AS400`);
+        } else {
+            showError(result.error || 'Failed to open order in AS400');
+        }
+    } catch (error) {
+        console.error('Error calling desktop helper:', error);
+        showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
+    }
+}
+
+async function openQuote() {
+    await openOrderViaDesktopHelper('open-quote');
 }
 
 async function openInvoice() {
-    const actionOrder = getSelectedOrder();
-    if (!actionOrder || !actionOrder.id) {
-        alert('Please select an order first');
-        return;
-    }
-
-    if (!actionOrder || !actionOrder.invoice_number) {
-        alert('No invoice number found for this order');
-        return;
-    }
-
-    const helperAvailable = await checkDesktopHelper();
-    
-    if (helperAvailable) {
-        try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/open-invoice`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    invoice_number: actionOrder.invoice_number
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                showToast(`✅ Opening invoice ${actionOrder.invoice_number} in AS400`);
-            } else {
-                showError(result.error || 'Failed to open invoice');
-            }
-        } catch (error) {
-            console.error('Error calling desktop helper:', error);
-            showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
-        }
-    } else {
-        showError('Desktop helper service not available. Cannot open invoice automatically.');
-    }
+    await openOrderViaDesktopHelper('open-invoice');
 }
 
 async function openSpecialOrder() {
-    const actionOrder = getSelectedOrder();
-    if (!actionOrder || !actionOrder.id) {
-        alert('Please select an order first');
-        return;
-    }
-
-    const specialOrderNumber = actionOrder?.order_number || actionOrder?.invoice_number;
-
-    if (!actionOrder || !specialOrderNumber) {
-        alert('No special order number found for this order');
-        return;
-    }
-
-    const helperAvailable = await checkDesktopHelper();
-    
-    if (helperAvailable) {
-        try {
-            const response = await fetch(`${DESKTOP_HELPER_URL}/open-special-order`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_number: specialOrderNumber
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                showToast(`✅ Opening special order ${specialOrderNumber} in AS400`);
-            } else {
-                showError(result.error || 'Failed to open special order');
-            }
-        } catch (error) {
-            console.error('Error calling desktop helper:', error);
-            showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
-        }
-    } else {
-        showError('Desktop helper service not available. Cannot open special order automatically.');
-    }
+    await openOrderViaDesktopHelper('open-special-order');
 }
 
 // ===== OCR / Bulk Import Functions =====
 
 const ocrModal = document.getElementById('ocrModal');
 const ocrImportBtn = document.getElementById('ocrImportBtn');
+let pendingOCROrders = [];
+let pendingOCRImportMode = 'bulk';
+let pendingProcessImportOrderId = null;
+let pendingProcessImportFile = null;
 
+function parseOCRLineItems(lineItemsRaw) {
+    if (Array.isArray(lineItemsRaw)) {
+        return lineItemsRaw.filter(item => item && typeof item === 'object');
+    }
+
+    if (typeof lineItemsRaw === 'string' && lineItemsRaw.trim()) {
+        try {
+            const parsed = JSON.parse(lineItemsRaw);
+            return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
+        } catch (err) {
+            return [];
+        }
+    }
+
+    return [];
+}
+
+function formatOCRItemValue(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function appendOCRLineItemSummary(lines, items) {
+    lines.push(`line_items_count: ${items.length}`);
+
+    if (items.length === 0) {
+        return;
+    }
+
+    lines.push('line_items:');
+    const fields = [
+        ['product', 'product'],
+        ['type', 'type'],
+        ['quantity', 'quantity'],
+        ['vendor', 'vendor'],
+        ['price', 'price'],
+        ['size', 'size'],
+        ['width', 'width'],
+        ['height', 'height'],
+        ['series', 'series'],
+        ['model', 'model'],
+        ['style', 'style'],
+        ['operation', 'operation'],
+        ['swing', 'swing'],
+        ['handing', 'handing'],
+        ['jamb_size', 'jamb_size'],
+        ['thickness', 'thickness'],
+        ['material', 'material'],
+        ['color', 'color'],
+        ['glass', 'glass'],
+        ['hardware', 'hardware'],
+        ['boring', 'boring'],
+        ['room', 'room'],
+        ['location', 'location'],
+        ['special_notes', 'special_notes'],
+        ['notes', 'notes'],
+    ];
+
+    items.forEach((item, itemIndex) => {
+        lines.push(`  Item ${itemIndex + 1}`);
+        fields.forEach(([label, key]) => {
+            const value = formatOCRItemValue(item[key]);
+            if (value) {
+                lines.push(`    ${label}: ${value}`);
+            }
+        });
+    });
+}
+
+function buildOCRKeyFieldsText(orders) {
+    if (!Array.isArray(orders) || orders.length === 0) {
+        return 'No parsed orders available to summarize key fields.';
+    }
+
+    const lines = [];
+    orders.forEach((order, index) => {
+        const ord = order || {};
+        const lineItems = parseOCRLineItems(ord.line_items);
+
+        lines.push(`Order ${index + 1}`);
+        lines.push(`customer_name: ${ord.customer_name || ''}`);
+        lines.push(`customer_phone: ${ord.customer_phone || ''}`);
+        lines.push(`customer_email: ${ord.customer_email || ''}`);
+        lines.push(`project_name: ${ord.project_name || ''}`);
+        lines.push(`stage: ${ord.stage || ''}`);
+        lines.push(`quote_number: ${ord.quote_number || ''}`);
+        lines.push(`quote_date: ${ord.quote_date || ''}`);
+        lines.push(`quote_total: ${ord.quote_total ?? ''}`);
+        lines.push(`invoice_number: ${ord.invoice_number || ''}`);
+        lines.push(`invoice_date: ${ord.invoice_date || ''}`);
+        lines.push(`invoice_total: ${ord.invoice_total ?? ''}`);
+        lines.push(`po_numbers: ${ord.po_numbers || ord.po_number || ''}`);
+        lines.push(`po_date_signed: ${ord.po_date_signed || ''}`);
+        lines.push(`vendor: ${ord.vendor || ''}`);
+        appendOCRLineItemSummary(lines, lineItems);
+        lines.push(`notes: ${ord.notes || ''}`);
+        lines.push('');
+    });
+
+    return lines.join('\n').trim();
+}
+
+function resetOCRPreview() {
+    pendingOCROrders = [];
+    const panel = document.getElementById('ocrPreviewPanel');
+    const summary = document.getElementById('ocrPreviewSummary');
+    const rawText = document.getElementById('ocrRawExtract');
+    const parsedText = document.getElementById('ocrParsedExtract');
+    const keyFieldsText = document.getElementById('ocrKeyFieldsExtract');
+    const importBtn = document.getElementById('ocrImportParsedBtn');
+
+    if (panel) panel.style.display = 'none';
+    if (summary) summary.textContent = '';
+    if (rawText) rawText.value = '';
+    if (parsedText) parsedText.value = '';
+    if (keyFieldsText) keyFieldsText.value = '';
+    if (importBtn) {
+        importBtn.disabled = true;
+        importBtn.textContent = pendingOCRImportMode === 'process-order' ? 'Apply To This Order' : 'Import Parsed Orders';
+    }
+}
+
+function showOCRExtractionPreview(result) {
+    const panel = document.getElementById('ocrPreviewPanel');
+    const summary = document.getElementById('ocrPreviewSummary');
+    const rawText = document.getElementById('ocrRawExtract');
+    const parsedText = document.getElementById('ocrParsedExtract');
+    const keyFieldsText = document.getElementById('ocrKeyFieldsExtract');
+    const importBtn = document.getElementById('ocrImportParsedBtn');
+
+    if (!panel || !summary || !rawText || !parsedText || !keyFieldsText || !importBtn) {
+        return;
+    }
+
+    const orders = result?.data?.orders;
+    pendingOCROrders = Array.isArray(orders) ? orders : [];
+
+    rawText.value = String(result?.raw_text || '').trim();
+    parsedText.value = pendingOCROrders.length > 0
+        ? JSON.stringify(pendingOCROrders, null, 2)
+        : '';
+    keyFieldsText.value = buildOCRKeyFieldsText(pendingOCROrders);
+
+    summary.textContent = pendingOCROrders.length > 0
+        ? `Found ${pendingOCROrders.length} parsed order(s)`
+        : 'No parsed orders found (raw OCR text available)';
+
+    importBtn.disabled = pendingOCROrders.length === 0;
+    importBtn.textContent = pendingOCRImportMode === 'process-order' ? 'Apply To This Order' : 'Import Parsed Orders';
+    panel.style.display = 'block';
+}
+
+async function copyOCRPreviewText(kind) {
+    const sourceId = kind === 'parsed'
+        ? 'ocrParsedExtract'
+        : (kind === 'key-fields' ? 'ocrKeyFieldsExtract' : 'ocrRawExtract');
+    const input = document.getElementById(sourceId);
+    if (!input) return;
+
+    const text = String(input.value || '');
+    if (!text.trim()) {
+        showError('Nothing to copy for that section yet.');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(text);
+        if (kind === 'parsed') {
+            showToast('Copied parsed JSON');
+        } else if (kind === 'key-fields') {
+            showToast('Copied key fields');
+        } else {
+            showToast('Copied raw OCR text');
+        }
+    } catch (err) {
+        input.focus();
+        input.select();
+        showError('Clipboard copy failed. Selected text so you can copy manually.');
+    }
+}
+
+async function applyPreviewedOCRToExistingOrder() {
+    const orderData = pendingOCROrders.find(order => order && typeof order === 'object');
+    const targetOrderId = pendingProcessImportOrderId || selectedOrderId;
+
+    if (!orderData || !targetOrderId) {
+        showError('No parsed order data is ready to apply.');
+        return;
+    }
+
+    const activeOrder = allOrders.find(order => order.id === targetOrderId) || currentOrder || getSelectedOrder();
+    if (activeOrder) {
+        selectedOrderId = targetOrderId;
+        currentOrder = activeOrder;
+        populateInlineOrderForm(activeOrder);
+    }
+
+    const itemCount = applyImportedOrderToCurrentForm(orderData);
+    const payload = collectInlineOrderFormData();
+    if (orderData.stage) {
+        payload.stage = orderData.stage;
+    }
+
+    const response = await fetch(`${API_BASE}/orders/${targetOrderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const saveResult = await response.json();
+
+    if (!saveResult.success || !saveResult.order) {
+        throw new Error(saveResult.error || 'Parsed the file, but failed to update the order');
+    }
+
+    allOrders = allOrders.map(order => order.id === saveResult.order.id ? saveResult.order : order);
+    currentOrder = saveResult.order;
+    selectedOrderId = saveResult.order.id;
+    populateInlineOrderForm(saveResult.order);
+    renderSalesProcess(saveResult.order);
+    hideError();
+
+    if (pendingProcessImportFile && typeof uploadFile === 'function') {
+        await uploadFile(pendingProcessImportFile, saveResult.order.id);
+    }
+
+    await loadOrders();
+    closeOCRModal();
+    showToast(`Imported ${itemCount} line item${itemCount === 1 ? '' : 's'} into this order`);
+}
+
+async function importPreviewedOCROrders() {
+    if (!Array.isArray(pendingOCROrders) || pendingOCROrders.length === 0) {
+        showError('No parsed orders to import.');
+        return;
+    }
+
+    const importBtn = document.getElementById('ocrImportParsedBtn');
+    const originalText = pendingOCRImportMode === 'process-order' ? 'Apply To This Order' : 'Import Parsed Orders';
+    if (importBtn) {
+        importBtn.disabled = true;
+        importBtn.textContent = pendingOCRImportMode === 'process-order' ? 'Applying...' : 'Importing...';
+    }
+
+    if (pendingOCRImportMode === 'process-order') {
+        try {
+            await applyPreviewedOCRToExistingOrder();
+        } catch (error) {
+            console.error('Error applying previewed order import:', error);
+            showError(`Order import failed: ${error.message}`);
+            if (importBtn) {
+                importBtn.textContent = originalText;
+                importBtn.disabled = false;
+            }
+        }
+        return;
+    }
+
+    let imported = 0;
+    let failed = 0;
+
+    for (const orderData of pendingOCROrders) {
+        try {
+            const importResponse = await fetch(`${API_BASE}/orders`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(orderData)
+            });
+
+            const importResult = await importResponse.json();
+            if (importResult.success) {
+                imported++;
+            } else {
+                failed++;
+                console.error('Failed to import order:', importResult.error);
+            }
+        } catch (err) {
+            failed++;
+            console.error('Error importing order:', err);
+        }
+    }
+
+    if (importBtn) {
+        importBtn.textContent = 'Import Parsed Orders';
+        importBtn.disabled = false;
+    }
+
+    closeOCRModal();
+    loadOrders();
+
+    let message = `Import complete!\n\nImported: ${imported}`;
+    if (failed > 0) {
+        message += `\nFailed: ${failed}`;
+    }
+    alert(message);
+}
 // Initialize OCR button listener
 if (ocrImportBtn) {
     ocrImportBtn.addEventListener('click', () => {
@@ -6542,38 +6738,239 @@ if (ocrImportBtn) {
     });
 }
 
+function setOCRModalModeText(mode) {
+    const title = document.getElementById('ocrModalTitle');
+    const intro = document.getElementById('ocrModalIntro');
+    if (mode === 'process-order') {
+        if (title) title.textContent = 'Import Quote Into Order';
+        if (intro) intro.textContent = 'Review the raw text, parsed JSON, and key fields before applying this quote to the selected order.';
+        return;
+    }
+
+    if (title) title.textContent = 'Bulk Import';
+    if (intro) intro.textContent = 'Upload a JSON bulk import file to import multiple orders at once. Duplicate detection automatically prevents re-importing existing orders.';
+}
 function openOCRModal() {
+    pendingOCRImportMode = 'bulk';
+    pendingProcessImportOrderId = null;
+    pendingProcessImportFile = null;
+    setOCRModalModeText('bulk');
+    resetOCRPreview();
     ocrModal.style.display = 'block';
 }
 
 function closeOCRModal() {
     ocrModal.style.display = 'none';
+    resetOCRPreview();
+    pendingOCRImportMode = 'bulk';
+    pendingProcessImportOrderId = null;
+    pendingProcessImportFile = null;
     // Reset file input
     document.getElementById('ocrFileInput').value = '';
     document.getElementById('ocrFileName').textContent = '';
     document.getElementById('ocrProgress').style.display = 'none';
 }
 
-async function handleOCRFile(event) {
-    const file = event.target.files[0];
+function openProcessQuoteImportPicker() {
+    const activeOrder = getActiveOrderContext();
+    if (!activeOrder || !activeOrder.id) {
+        showError('Select an order first');
+        return;
+    }
+
+    currentOrder = activeOrder;
+    const input = document.getElementById('processQuoteImportInput');
+    if (input) input.click();
+}
+
+function getFirstParsedImportOrder(result) {
+    const orders = result?.data?.orders;
+    if (Array.isArray(orders) && orders.length > 0) {
+        return orders.find(order => order && typeof order === 'object') || null;
+    }
+    return null;
+}
+
+async function parseOrderImportFile(file) {
+    const lowerName = String(file?.name || '').toLowerCase();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const endpoint = (lowerName.endsWith('.json') || lowerName.endsWith('.csv'))
+        ? `${API_BASE}/import/parse-file`
+        : `${API_BASE}/ocr/process-file`;
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData
+    });
+    const result = await response.json();
+
+    if (!result.success) {
+        throw new Error(result.error || 'File import failed');
+    }
+
+    return {
+        result,
+        parsedOrder: getFirstParsedImportOrder(result)
+    };
+}
+
+function applyImportedOrderToCurrentForm(importedOrder) {
+    const imported = importedOrder || {};
+    const selectedOrder = getSelectedOrder() || currentOrder || {};
+
+    const fieldNames = [
+        'customer_name',
+        'customer_phone',
+        'customer_email',
+        'project_name',
+        'quote_number',
+        'quote_date',
+        'quote_total',
+        'invoice_number',
+        'invoice_date',
+        'invoice_total',
+        'po_numbers',
+        'po_date_signed',
+        'vendor',
+        'product_type',
+        'vendor_ack_number',
+        'vendor_ack_total',
+        'eta_date'
+    ];
+
+    fieldNames.forEach(field => {
+        const elementId = INLINE_ORDER_FIELDS[field];
+        const element = elementId ? document.getElementById(elementId) : null;
+        if (!element) return;
+
+        let value = imported[field];
+        if ((value === null || value === undefined || String(value).trim() === '') && field === 'po_numbers') {
+            value = imported.po_number;
+        }
+        if (value === null || value === undefined || String(value).trim() === '') return;
+
+        const displayValue = field.endsWith('_date') ? toInputDate(value) : String(value).trim();
+        element.value = displayValue;
+
+        const stageInput = processTimeline
+            ? processTimeline.querySelector(`[data-stage-source-field="${field}"]`)
+            : null;
+        if (stageInput) stageInput.value = displayValue;
+    });
+
+    const importedItems = parseOCRLineItems(imported.line_items);
+    if (importedItems.length > 0) {
+        const normalizedItems = typeof normalizeLineItem === 'function'
+            ? importedItems.map(item => normalizeLineItem(item))
+            : importedItems;
+        currentLineItems = currentLineItems.length > 0
+            ? [...currentLineItems, ...normalizedItems]
+            : normalizedItems;
+        if (typeof enforceSinglePrefitDoor === 'function') enforceSinglePrefitDoor();
+        if (typeof renderLineItemsEditor === 'function') renderLineItemsEditor();
+        if (typeof syncDoorSwingSelectElements === 'function') syncDoorSwingSelectElements();
+        if (typeof syncLineItemsToHiddenField === 'function') syncLineItemsToHiddenField();
+    }
+
+    if (imported.stage && selectedOrder && selectedOrder.stage !== imported.stage) {
+        selectedOrder.stage = imported.stage;
+    }
+
+    return importedItems.length;
+}
+
+async function handleProcessQuoteImportFile(event) {
+    const file = event?.target?.files?.[0];
     if (!file) return;
+
+    const activeOrder = getActiveOrderContext();
+    if (!activeOrder || !activeOrder.id) {
+        showError('Select an order first');
+        event.target.value = '';
+        return;
+    }
+
+    flushActiveEditsBeforeSave();
+    currentOrder = activeOrder;
+    pendingOCRImportMode = 'process-order';
+    pendingProcessImportOrderId = activeOrder.id;
+    pendingProcessImportFile = file;
+    resetOCRPreview();
+
+    if (ocrModal) {
+        ocrModal.style.display = 'block';
+    }
+    const fileName = document.getElementById('ocrFileName');
+    const progress = document.getElementById('ocrProgress');
+    const progressBar = document.getElementById('ocrProgressBar');
+    if (fileName) fileName.textContent = `Selected: ${file.name}`;
+    if (progress) progress.style.display = 'block';
+    if (progressBar) progressBar.style.width = '35%';
+    showToast(`Reading ${file.name}...`);
+
+    try {
+        const { result, parsedOrder } = await parseOrderImportFile(file);
+        if (progressBar) progressBar.style.width = '100%';
+        showOCRExtractionPreview(result);
+        if (progress) progress.style.display = 'none';
+
+        if (parsedOrder) {
+            const itemCount = parseOCRLineItems(parsedOrder.line_items).length;
+            showToast(`Preview ready: ${itemCount} line item${itemCount === 1 ? '' : 's'} found`);
+        } else {
+            showToast('Raw text extracted. Parsed fields were incomplete.');
+        }
+    } catch (error) {
+        console.error('Order file import preview error:', error);
+        showError(`Order import preview failed: ${error.message}`);
+        if (progress) progress.style.display = 'none';
+    } finally {
+        event.target.value = '';
+    }
+}async function handleOCRFile(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const file = selectedFiles[0];
+    resetOCRPreview();
     
     // Show filename
-    document.getElementById('ocrFileName').textContent = `Selected: ${file.name}`;
+    document.getElementById('ocrFileName').textContent = selectedFiles.length > 1
+        ? `Selected: ${selectedFiles.length} files`
+        : `Selected: ${file.name}`;
     document.getElementById('ocrProgress').style.display = 'block';
     
     const progressBar = document.getElementById('ocrProgressBar');
     progressBar.style.width = '0%';
     
-    // Check file type - JSON files get bulk imported
-    if (file.name.endsWith('.json')) {
+    // Check file type - JSON/CSV files get bulk imported
+    const lowerName = file.name.toLowerCase();
+    const hasMultiple = selectedFiles.length > 1;
+    const allFormFiles = selectedFiles.every(entry => {
+        const name = String(entry?.name || '').toLowerCase();
+        return name.endsWith('.json') || name.endsWith('.csv');
+    });
+
+    if (hasMultiple && !allFormFiles) {
+        showError('Batch import supports only .json and .csv files');
+        document.getElementById('ocrProgress').style.display = 'none';
+        return;
+    }
+
+    if ((lowerName.endsWith('.json') || lowerName.endsWith('.csv')) || allFormFiles) {
         try {
             // Show progress
             progressBar.style.width = '30%';
             
             // Upload and import
             const formData = new FormData();
-            formData.append('file', file);
+            if (hasMultiple) {
+                selectedFiles.forEach(entry => formData.append('files', entry));
+            } else {
+                formData.append('file', file);
+            }
             
             progressBar.style.width = '60%';
             
@@ -6590,9 +6987,14 @@ async function handleOCRFile(event) {
             
             setTimeout(() => {
                 if (result.success) {
-                    showToast(result.message);
+                    showToast(result.message || 'Import complete');
                     closeOCRModal();
                     loadOrders(); // Refresh table
+                } else if (result.mode === 'batch') {
+                    const summary = result.message || `Batch import finished: ${result.imported_count || 0} imported, ${result.duplicate_count || 0} duplicates, ${result.failed_count || 0} failed`;
+                    alert(`📥 Batch Import\n\n${summary}`);
+                    closeOCRModal();
+                    loadOrders();
                 } else if (result.duplicate) {
                     alert(`⚠️ Duplicate Detected\n\n${result.message}\n\nThis order was not imported.`);
                     closeOCRModal();
@@ -6604,121 +7006,57 @@ async function handleOCRFile(event) {
             
         } catch (error) {
             console.error('Bulk import error:', error);
-            showError('Failed to import JSON file');
+            showError('Failed to import form file');
             document.getElementById('ocrProgress').style.display = 'none';
         }
-    } else if (file.name.toLowerCase().endsWith('.pdf')) {
-        // Process PDF with OCR
+    } else if (lowerName.endsWith('.pdf') || (file.type && file.type.startsWith('image/'))) {
+        // Process PDF/image with OCR
         try {
             progressBar.style.width = '30%';
-            
+
             const formData = new FormData();
             formData.append('file', file);
-            
+
             progressBar.style.width = '50%';
-            
-            const response = await fetch(`${API_BASE}/ocr/process-pdf`, {
+
+            const response = await fetch(`${API_BASE}/ocr/process-file`, {
                 method: 'POST',
                 body: formData
             });
-            
+
             progressBar.style.width = '80%';
-            
+
             const result = await response.json();
-            
+
             console.log('OCR Response:', result);  // DEBUG
-            
+
             progressBar.style.width = '100%';
-            
+
             if (result.success && result.parsed && result.data && result.data.orders) {
-                // Successfully parsed orders from PDF
-                setTimeout(async () => {
-                    const orders = result.data.orders;
-                    
-                    // Check if orders is actually an array
-                    if (!Array.isArray(orders)) {
-                        console.error('Orders is not an array:', orders);
-                        alert('❌ Error: Unexpected response format from server');
-                        closeOCRModal();
-                        return;
-                    }
-                    
-                    showToast(`✅ PDF processed! Found ${orders.length} order(s)`);
-                    
-                    // Import each order
-                    let imported = 0;
-                    let failed = 0;
-                    
-                    for (const orderData of orders) {
-                        try {
-                            // Use the correct endpoint: POST /api/orders
-                            const importResponse = await fetch(`${API_BASE}/orders`, {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify(orderData)
-                            });
-                            
-                            const importResult = await importResponse.json();
-                            
-                            if (importResult.success) {
-                                imported++;
-                            } else {
-                                console.error('Failed to import order:', importResult.error);
-                                failed++;
-                            }
-                        } catch (err) {
-                            console.error('Error importing order:', err);
-                            failed++;
-                        }
-                    }
-                    
-                    closeOCRModal();
-                    loadOrders(); // Refresh table
-                    
-                    let message = `✅ Import complete!\n\n`;
-                    message += `Imported: ${imported}\n`;
-                    if (failed > 0) {
-                        message += `Failed: ${failed}\n`;
-                    }
-                    alert(message);
-                }, 300);
-                
-            } else if (result.success && result.raw_text) {
-                // Text extracted but not parsed
                 setTimeout(() => {
+                    showOCRExtractionPreview(result);
+                    showToast(`File processed! Found ${result.data.orders.length} parsed order(s). Review and import when ready.`);
                     document.getElementById('ocrProgress').style.display = 'none';
-                    alert('⚠️ PDF Text Extracted\n\n' +
-                        'Text was extracted from the PDF but could not be automatically parsed as an order form.\n\n' +
-                        'This may be because:\n' +
-                        '• The PDF format is not recognized\n' +
-                        '• The text quality is poor\n' +
-                        '• It\'s not a standard order form\n\n' +
-                        'Please manually create the order or use the desktop version for custom form parsing.');
-                    closeOCRModal();
+                }, 300);
+
+            } else if (result.success && result.raw_text) {
+                setTimeout(() => {
+                    showOCRExtractionPreview(result);
+                    document.getElementById('ocrProgress').style.display = 'none';
+                    showToast('OCR text extracted. Parsed fields were incomplete, use the preview to copy notes.');
                 }, 300);
             } else {
-                throw new Error(result.error || 'Failed to process PDF');
+                throw new Error(result.error || 'Failed to process file');
             }
-            
+
         } catch (error) {
-            console.error('PDF OCR error:', error);
-            showError(`PDF processing failed: ${error.message}`);
+            console.error('OCR file error:', error);
+            showError(`OCR processing failed: ${error.message}`);
             document.getElementById('ocrProgress').style.display = 'none';
         }
     } else {
-        // For image files or other formats
-        progressBar.style.width = '100%';
-        setTimeout(() => {
-            document.getElementById('ocrProgress').style.display = 'none';
-            alert('OCR Import for Images\n\n' +
-                'Image/PDF OCR import requires additional setup:\n\n' +
-                '• Install Tesseract OCR library\n' +
-                '• Configure server-side OCR processing\n' +
-                '• Parse extracted text into order data\n\n' +
-                'Currently supported: JSON bulk import files and PDF forms\n' +
-                'The desktop version has full OCR capabilities.');
-            closeOCRModal();
-        }, 500);
+        document.getElementById('ocrProgress').style.display = 'none';
+        showError('Unsupported file type. Choose a JSON, CSV, PDF, or image file.');
     }
 }
 
@@ -6854,3 +7192,17 @@ function showNewOrderNotification(count) {
 window.addEventListener('beforeunload', () => {
     stopMonitoring();
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
