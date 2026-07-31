@@ -747,22 +747,31 @@ body.high-contrast .item-add-style-button:hover {
     letter-spacing: 0.03em;
 }
 
-.orders-collapse-btn {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-small);
+.orders-collapse-handle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 34px;
+    border-radius: 5px;
     background: var(--surface);
-    color: var(--text-primary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    padding: 0;
+    z-index: 2;
 }
 
-.orders-collapse-btn:hover {
+.orders-collapse-handle:hover {
     border-color: var(--primary);
     background: rgba(33, 150, 243, 0.18);
+    color: var(--text-primary);
 }
 
 .workspace-layout.orders-collapsed {
@@ -770,23 +779,31 @@ body.high-contrast .item-add-style-button:hover {
 }
 
 .orders-column.collapsed .orders-column-header {
-    padding: var(--padding-medium) 6px;
-}
-
-.orders-column.collapsed .orders-column-header-top {
-    justify-content: center;
-}
-
-.orders-column.collapsed .orders-column-header-top h2,
-.orders-column.collapsed .orders-column-subtitle,
-.orders-column.collapsed .orders-search-input,
-.orders-column.collapsed #ordersList {
     display: none;
 }
 
-.orders-column.collapsed .orders-collapse-btn {
-    writing-mode: vertical-rl;
-    padding: 10px 4px;
+.orders-column.collapsed .orders-list {
+    padding: 8px 4px;
+}
+
+.orders-column.collapsed .order-list-item {
+    padding: 8px 4px;
+}
+
+.orders-column.collapsed .order-list-top {
+    justify-content: center;
+}
+
+.orders-column.collapsed .order-list-top-left {
+    justify-content: center;
+}
+
+.orders-column.collapsed .order-list-customer,
+.orders-column.collapsed .order-status-chip,
+.orders-column.collapsed .order-list-actions,
+.orders-column.collapsed .order-list-project,
+.orders-column.collapsed .order-list-meta {
+    display: none;
 }
 
 .orders-column-subtitle {

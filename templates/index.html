@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260731-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260731-2') }}">
 </head>
 <body>
     <div class="container">
@@ -127,10 +127,10 @@
 
         <div class="workspace-layout" id="workspaceLayout">
             <aside class="orders-column" id="ordersColumn">
+                <button type="button" id="toggleOrdersColumnBtn" class="orders-collapse-handle" aria-expanded="true" title="Collapse order list">&lsaquo;</button>
                 <div class="orders-column-header">
                     <div class="orders-column-header-top">
                         <h2>Orders</h2>
-                        <button type="button" id="toggleOrdersColumnBtn" class="orders-collapse-btn" aria-expanded="true" title="Collapse order list">Collapse</button>
                     </div>
                     <span class="orders-column-subtitle">Click an order to open its sales process</span>
                     <input
@@ -1300,7 +1300,7 @@
         ↑ Top
     </button>
 
-    <script src="{{ url_for('static', filename='js/app.js', v='20260731-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260731-2') }}"></script>
     <script src="{{ url_for('static', filename='js/line-items.js', v='20260717-3') }}"></script>
     <script src="{{ url_for('static', filename='js/line-item-catalog.js', v='20260717-2') }}"></script>
     <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260716-3') }}"></script>

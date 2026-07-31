@@ -522,7 +522,7 @@ function setOrdersColumnCollapsed(collapsed) {
     const isCollapsed = Boolean(collapsed);
     ordersColumn.classList.toggle('collapsed', isCollapsed);
     workspaceLayout.classList.toggle('orders-collapsed', isCollapsed);
-    toggleOrdersColumnBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    toggleOrdersColumnBtn.textContent = isCollapsed ? '›' : '‹';
     toggleOrdersColumnBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
     toggleOrdersColumnBtn.setAttribute('title', isCollapsed ? 'Expand order list' : 'Collapse order list');
 }
