@@ -183,6 +183,12 @@
                         </div>
                     </div>
 
+                    <div class="detail-tabs" role="tablist">
+                        <button type="button" class="detail-tab active" id="detailTabBtnSalesProcess" data-tab-target="detailTabSalesProcess" role="tab" aria-selected="true">Sales Process</button>
+                        <button type="button" class="detail-tab" id="detailTabBtnOrderDetails" data-tab-target="detailTabOrderDetails" role="tab" aria-selected="false">Order Details</button>
+                    </div>
+
+                    <div id="detailTabSalesProcess" class="detail-tab-panel active" role="tabpanel" aria-labelledby="detailTabBtnSalesProcess">
                     <div class="items-type-actions items-top-actions">
                         <button type="button" id="addDoorItemBtn" class="btn btn-primary">+ Door</button>
                         <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
@@ -277,12 +283,20 @@
                             </div>
                         </div>
                     </div>
+                    </div>
 
                     <div id="floatingStageJumpBar" class="floating-stage-jump-bar" aria-label="Quick stage jump controls">
                         <div id="floatingStageJumpTrack" class="floating-stage-jump-track"></div>
                     </div>
 
+                    <div id="detailTabOrderDetails" class="detail-tab-panel" role="tabpanel" aria-labelledby="detailTabBtnOrderDetails" style="display: none;">
                     <div class="inline-order-store">
+                        <div class="process-editor-header">
+                            <h3>Order Details</h3>
+                            <div class="process-editor-actions">
+                                <button type="button" id="saveInlineOrderBtnTab2" class="btn btn-primary">Save Changes</button>
+                            </div>
+                        </div>
                         <form id="inlineOrderForm" class="form-grid">
                             <input type="hidden" id="inline_line_items" name="line_items">
                             <input type="hidden" id="inline_additional_quotes" name="additional_quotes">
@@ -318,7 +332,8 @@
                             </div>
                             <div class="form-group">
                                 <label for="inline_stage">Stage *</label>
-                                <select id="inline_stage" name="stage" required></select>
+                                <select id="inline_stage" name="stage" required disabled></select>
+                                <small class="field-hint">Change stage using the Sales Process action buttons (Previous/Next/Jump Stage).</small>
                             </div>
                             <div class="form-group">
                                 <label for="inline_priority_manual">Priority</label>
@@ -420,6 +435,7 @@
                                 <input type="date" id="inline_eta_date" name="eta_date">
                             </div>
                         </form>
+                    </div>
                     </div>
 
                 </div>

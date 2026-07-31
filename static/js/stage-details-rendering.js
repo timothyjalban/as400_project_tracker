@@ -13,6 +13,9 @@ function renderSalesProcess(order) {
 
     processEmpty.style.display = 'none';
     processContent.style.display = 'block';
+    if (typeof switchDetailTab === 'function') {
+        switchDetailTab('detailTabSalesProcess');
+    }
 
     const stageIndex = STAGES.indexOf(order.stage || '');
     const completedCount = stageIndex >= 0 ? stageIndex : 0;
@@ -173,9 +176,12 @@ function renderFloatingStageJumpBar(order) {
         `;
     }).join('');
 
-    floatingStageJumpBar.classList.add('visible');
+    const isSalesProcessTabActive = !processContent
+        || !processContent.dataset.activeTab
+        || processContent.dataset.activeTab === 'detailTabSalesProcess';
+    floatingStageJumpBar.classList.toggle('visible', isSalesProcessTabActive);
     if (processContent) {
-        processContent.classList.add('has-floating-stage-jump');
+        processContent.classList.toggle('has-floating-stage-jump', isSalesProcessTabActive);
     }
 }
 

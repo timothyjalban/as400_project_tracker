@@ -87,6 +87,8 @@ const toggleItemsContainerBtn = document.getElementById('toggleItemsContainerBtn
 const workspaceLayout = document.getElementById('workspaceLayout');
 const ordersColumn = document.getElementById('ordersColumn');
 const toggleOrdersColumnBtn = document.getElementById('toggleOrdersColumnBtn');
+const detailTabButtons = document.querySelectorAll('.detail-tab');
+const detailTabPanels = document.querySelectorAll('.detail-tab-panel');
 const confirmDialogModal = document.getElementById('confirmDialogModal');
 const confirmDialogTitle = document.getElementById('confirmDialogTitle');
 const confirmDialogMessage = document.getElementById('confirmDialogMessage');
@@ -538,6 +540,36 @@ function initializeOrdersColumnCollapse() {
     }
 }
 
+function switchDetailTab(targetId) {
+    if (!detailTabButtons.length || !detailTabPanels.length) return;
+
+    detailTabButtons.forEach(btn => {
+        const isActive = btn.dataset.tabTarget === targetId;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    detailTabPanels.forEach(panel => {
+        const isActive = panel.id === targetId;
+        panel.classList.toggle('active', isActive);
+        panel.style.display = isActive ? '' : 'none';
+    });
+    if (processContent) {
+        processContent.dataset.activeTab = targetId;
+    }
+    if (typeof renderFloatingStageJumpBar === 'function' && typeof getSelectedOrder === 'function') {
+        renderFloatingStageJumpBar(getSelectedOrder());
+    }
+}
+
+function initializeDetailTabs() {
+    detailTabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.dataset.tabTarget;
+            if (target) switchDetailTab(target);
+        });
+    });
+}
+
 function runStartupStep(label, fn) {
     try {
         const result = fn();
@@ -557,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
     runStartupStep('high contrast toggle', initializeHighContrastToggle);
     runStartupStep('order items collapse', initializeOrderItemsContainerCollapse);
     runStartupStep('orders column collapse', initializeOrdersColumnCollapse);
+    runStartupStep('detail tabs', initializeDetailTabs);
     runStartupStep('as400 comment prefs button', initializeAs400CommentPrefsButton);
     runStartupStep('stage tab loop', bindStageTabLoop);
     runStartupStep('bulk set panel', initBulkSetPanel);
@@ -655,6 +688,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (saveInlineOrderBtn) {
         saveInlineOrderBtn.addEventListener('click', saveInlineOrder);
+    }
+
+    const saveInlineOrderBtnTab2 = document.getElementById('saveInlineOrderBtnTab2');
+    if (saveInlineOrderBtnTab2) {
+        saveInlineOrderBtnTab2.addEventListener('click', saveInlineOrder);
     }
 
     const inlineStage = document.getElementById(INLINE_ORDER_FIELDS.stage);

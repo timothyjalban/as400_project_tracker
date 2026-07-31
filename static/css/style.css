@@ -1609,6 +1609,34 @@ body.high-contrast .item-add-style-button:hover {
     font-weight: var(--font-weight-semibold);
 }
 
+.detail-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--padding-medium);
+}
+
+.detail-tab {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    padding: 10px 16px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.detail-tab:hover {
+    color: var(--text-primary);
+}
+
+.detail-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
 .process-timeline-card {
     border: 1px solid var(--border);
     border-radius: var(--radius-medium);
@@ -1632,10 +1660,6 @@ body.high-contrast .item-add-style-button:hover {
     border-radius: var(--radius-medium);
     background-color: rgba(255, 255, 255, 0.02);
     padding: var(--padding-large);
-}
-
-.inline-order-store {
-    display: none;
 }
 
 .process-stage-fields-card {
