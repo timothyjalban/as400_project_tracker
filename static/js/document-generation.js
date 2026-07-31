@@ -217,7 +217,7 @@ function mapLineItemForAs400Automation(item) {
     const sizeText = String(item.callout_size || item.size || '').trim() || (width && height ? `${width} x ${height}` : '');
     const operationText = String(item.operation || item.operation_style || item.handing || '').trim();
     const locationText = String(item.location || item.room || '').trim();
-    const descriptionText = String(item.description || '').trim() || buildCtrlAltSDescription(item) || [operationText, sizeText].filter(Boolean).join(' ');
+    const descriptionText = buildCtrlAltSDescription(item) || String(item.description || '').trim() || [operationText, sizeText].filter(Boolean).join(' ');
     const bomCommentText = buildBomCommentText(item);
     const itemTypeText = String(item.type || item.item_type || item.product || '').toLowerCase();
     const isDoor = itemTypeText.includes('door');
