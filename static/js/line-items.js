@@ -1751,6 +1751,7 @@ function renderLineItemsEditor() {
             <div class="line-item-card as400-group-card as400-group-${groupColor}" data-line-item-card="${index}" data-as400-group-card="${escapeHtml(groupName)}">
                 <div class="line-item-header">
                     <div class="line-item-header-main">
+                        <span class="line-item-number">#${index + 1}</span>
                         <div class="line-item-type-toggle">
                             <button type="button" class="item-type-button ${isDoor ? 'active' : ''}" data-item-index="${index}" data-item-field="type" data-item-value="door">Door</button>
                             <button type="button" class="item-type-button ${isWindow ? 'active' : ''}" data-item-index="${index}" data-item-field="type" data-item-value="window">Window</button>
