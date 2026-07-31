@@ -84,6 +84,9 @@ const addHardwareItemBottomBtn = document.getElementById('addHardwareItemBottomB
 const lineItemsList = document.getElementById('lineItemsList');
 const orderItemsContainerCard = document.getElementById('orderItemsContainerCard');
 const toggleItemsContainerBtn = document.getElementById('toggleItemsContainerBtn');
+const workspaceLayout = document.getElementById('workspaceLayout');
+const ordersColumn = document.getElementById('ordersColumn');
+const toggleOrdersColumnBtn = document.getElementById('toggleOrdersColumnBtn');
 const confirmDialogModal = document.getElementById('confirmDialogModal');
 const confirmDialogTitle = document.getElementById('confirmDialogTitle');
 const confirmDialogMessage = document.getElementById('confirmDialogMessage');
@@ -509,6 +512,32 @@ function syncPriorityInputWithStage(stageElement, priorityElement, previousStage
     priorityElement.dataset.autoPriorityStage = nextStage || '';
 }
 
+const ORDERS_COLUMN_COLLAPSED_STORAGE_KEY = 'order_tracker_orders_column_collapsed';
+
+function setOrdersColumnCollapsed(collapsed) {
+    if (!ordersColumn || !workspaceLayout || !toggleOrdersColumnBtn) return;
+
+    const isCollapsed = Boolean(collapsed);
+    ordersColumn.classList.toggle('collapsed', isCollapsed);
+    workspaceLayout.classList.toggle('orders-collapsed', isCollapsed);
+    toggleOrdersColumnBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
+    toggleOrdersColumnBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    toggleOrdersColumnBtn.setAttribute('title', isCollapsed ? 'Expand order list' : 'Collapse order list');
+}
+
+function initializeOrdersColumnCollapse() {
+    const saved = window.localStorage.getItem(ORDERS_COLUMN_COLLAPSED_STORAGE_KEY);
+    setOrdersColumnCollapsed(saved === 'true');
+
+    if (toggleOrdersColumnBtn) {
+        toggleOrdersColumnBtn.addEventListener('click', () => {
+            const nextState = !ordersColumn.classList.contains('collapsed');
+            setOrdersColumnCollapsed(nextState);
+            window.localStorage.setItem(ORDERS_COLUMN_COLLAPSED_STORAGE_KEY, nextState ? 'true' : 'false');
+        });
+    }
+}
+
 function runStartupStep(label, fn) {
     try {
         const result = fn();
@@ -527,6 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     runStartupStep('high contrast toggle', initializeHighContrastToggle);
     runStartupStep('order items collapse', initializeOrderItemsContainerCollapse);
+    runStartupStep('orders column collapse', initializeOrdersColumnCollapse);
     runStartupStep('as400 comment prefs button', initializeAs400CommentPrefsButton);
     runStartupStep('stage tab loop', bindStageTabLoop);
     runStartupStep('bulk set panel', initBulkSetPanel);

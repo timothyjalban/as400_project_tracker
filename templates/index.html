@@ -125,10 +125,13 @@
             <span id="ordersCount">Loading...</span>
         </div>
 
-        <div class="workspace-layout">
-            <aside class="orders-column">
+        <div class="workspace-layout" id="workspaceLayout">
+            <aside class="orders-column" id="ordersColumn">
                 <div class="orders-column-header">
-                    <h2>Orders</h2>
+                    <div class="orders-column-header-top">
+                        <h2>Orders</h2>
+                        <button type="button" id="toggleOrdersColumnBtn" class="orders-collapse-btn" aria-expanded="true" title="Collapse order list">Collapse</button>
+                    </div>
                     <span class="orders-column-subtitle">Click an order to open its sales process</span>
                     <input
                         type="text"

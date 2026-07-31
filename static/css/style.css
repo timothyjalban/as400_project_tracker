@@ -734,10 +734,59 @@ body.high-contrast .item-add-style-button:hover {
     background: rgba(255, 255, 255, 0.02);
 }
 
+.orders-column-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
 .orders-column-header h2 {
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.03em;
+}
+
+.orders-collapse-btn {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    padding: 4px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.orders-collapse-btn:hover {
+    border-color: var(--primary);
+    background: rgba(33, 150, 243, 0.18);
+}
+
+.workspace-layout.orders-collapsed {
+    grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.orders-column.collapsed .orders-column-header {
+    padding: var(--padding-medium) 6px;
+}
+
+.orders-column.collapsed .orders-column-header-top {
+    justify-content: center;
+}
+
+.orders-column.collapsed .orders-column-header-top h2,
+.orders-column.collapsed .orders-column-subtitle,
+.orders-column.collapsed .orders-search-input,
+.orders-column.collapsed #ordersList {
+    display: none;
+}
+
+.orders-column.collapsed .orders-collapse-btn {
+    writing-mode: vertical-rl;
+    padding: 10px 4px;
 }
 
 .orders-column-subtitle {
@@ -3460,7 +3509,8 @@ body.high-contrast .item-add-style-button:hover {
         min-width: unset;
     }
     
-    .workspace-layout {
+    .workspace-layout,
+    .workspace-layout.orders-collapsed {
         grid-template-columns: 1fr;
         min-height: auto;
     }
