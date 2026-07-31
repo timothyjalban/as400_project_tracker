@@ -1836,7 +1836,7 @@ function renderLineItemsEditor() {
                     </div>
                     ${!isHardware ? `
                     <div class="line-item-field">
-                        <label>Size Type</label>
+                        <label>Opening Type</label>
                         <select data-item-index="${index}" data-item-field="size_mode">
                             ${renderSelectOptions([
                                 { value: 'callout', label: 'Call Out' },

@@ -275,6 +275,13 @@ function windowHandingText(item) {
     return raw;
 }
 
+function sizeModePrefixText(item) {
+    const sizeMode = String(item?.size_mode || '').trim().toLowerCase();
+    if (sizeMode === 'rough_opening') return 'RO';
+    if (sizeMode === 'net_size') return 'NF';
+    return '';
+}
+
 function doorSizeText(item) {
     const raw = normalizeMacroText(macroItemValue(item, 'callout_size', 'size'));
     const compact = raw.replace(/\s+/g, '');
@@ -452,13 +459,16 @@ function buildCtrlAltSDescription(item) {
         ].filter(Boolean).join(' ').slice(0, 36);
     }
     if (itemType === 'window') {
-        const size = windowSizeText(item);
+        const size = [sizeModePrefixText(item), windowSizeText(item)].filter(Boolean).join(' ');
         const series = seriesDescriptionText(item);
         const operation = windowHandingText(item);
         return [size, operation, series].filter(Boolean).join(' ').slice(0, 36);
     }
 
-    const sizeToken = isBypassDoorDescription(item) ? bypassDoorSizeText(item) : doorSizeText(item);
+    const sizeToken = [
+        sizeModePrefixText(item),
+        isBypassDoorDescription(item) ? bypassDoorSizeText(item) : doorSizeText(item),
+    ].filter(Boolean).join(' ');
     const thickness = doorThicknessText(item);
     const core = doorCoreDescriptionText(item);
     const series = seriesDescriptionText(item);

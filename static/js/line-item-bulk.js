@@ -13,7 +13,7 @@ const BULK_SET_FIELDS = [
     { value: 'style',          label: 'Style',           type: 'select',   scope: 'all' },
     { value: 'vendor',         label: 'Vendor',          type: 'select',   scope: 'all' },
     { value: 'series',         label: 'Model / Series',  type: 'select',   scope: 'all' },
-    { value: 'size_mode',      label: 'Size Type',       type: 'select',   scope: 'both', options: [
+    { value: 'size_mode',      label: 'Opening Type',    type: 'select',   scope: 'both', options: [
         { value: 'callout', label: 'Call Out' },
         { value: 'rough_opening', label: 'Rough Opening' },
         { value: 'net_size', label: 'Net Size' },
