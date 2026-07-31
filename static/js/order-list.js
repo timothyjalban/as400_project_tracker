@@ -143,6 +143,25 @@ function sortOrdersForList(orders) {
     });
 }
 
+const ORDER_AVATAR_COLOR_CLASSES = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'];
+
+function getOrderInitials(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return '?';
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function getOrderAvatarColorClass(order) {
+    const key = String(order?.id ?? order?.customer_name ?? '');
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+        hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    }
+    return ORDER_AVATAR_COLOR_CLASSES[hash % ORDER_AVATAR_COLOR_CLASSES.length];
+}
+
 // Render orders in table
 function renderOrdersTable(orders) {
     if (!ordersList) return;
@@ -172,10 +191,14 @@ function renderOrdersTable(orders) {
             isFlagged ? 'is-flagged' : ''
         ].filter(Boolean).join(' ');
 
+        const initials = getOrderInitials(order.customer_name);
+        const avatarColorClass = getOrderAvatarColorClass(order);
+
         return `
             <div class="${itemClasses}" role="button" tabindex="0" onclick="selectOrder(${order.id})" ondblclick="viewOrderDetails(${order.id})" onkeydown="handleOrderListItemKey(event, ${order.id})">
                 <div class="order-list-top">
                     <div class="order-list-top-left">
+                        <div class="order-list-avatar ${avatarColorClass}">${escapeHtml(initials)}</div>
                         <span class="order-list-customer">${escapeHtml(order.customer_name || 'Unnamed Customer')}</span>
                         ${isPinned ? '<span class="order-status-chip pinned" title="Pinned">Pinned</span>' : ''}
                         ${isFlagged ? '<span class="order-status-chip flagged" title="Flagged">Flagged</span>' : ''}
@@ -183,9 +206,11 @@ function renderOrdersTable(orders) {
                         ${streetOnlyAddress ? `<span class="order-status-chip address" title="${escapeHtml(streetOnlyAddress)}">${escapeHtml(streetOnlyAddress)}</span>` : ''}
                     </div>
                     <div class="order-list-actions">
-                        <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
-                        <button class="order-icon-btn ${isPinned ? 'active' : ''}" title="${isPinned ? 'Unpin order' : 'Pin order'}" onclick="toggleOrderPin(event, ${order.id})">📌</button>
-                        <button class="order-icon-btn ${isFlagged ? 'active' : ''}" title="${isFlagged ? 'Unflag order' : 'Flag order'}" onclick="toggleOrderFlag(event, ${order.id})">🚩</button>
+                        <div class="order-list-icon-actions">
+                            <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
+                            <button class="order-icon-btn ${isPinned ? 'active' : ''}" title="${isPinned ? 'Unpin order' : 'Pin order'}" onclick="toggleOrderPin(event, ${order.id})">📌</button>
+                            <button class="order-icon-btn ${isFlagged ? 'active' : ''}" title="${isFlagged ? 'Unflag order' : 'Flag order'}" onclick="toggleOrderFlag(event, ${order.id})">🚩</button>
+                        </div>
                         <span class="order-list-id">#${order.id || ''}</span>
                     </div>
                 </div>
@@ -230,17 +255,23 @@ function renderCompletedOrders(orders) {
             .filter(Boolean)
             .join(' ');
 
+        const initials = getOrderInitials(order.customer_name);
+        const avatarColorClass = getOrderAvatarColorClass(order);
+
         return `
             <div class="${itemClasses}" role="button" tabindex="0" onclick="selectOrder(${order.id})" ondblclick="viewOrderDetails(${order.id})" onkeydown="handleOrderListItemKey(event, ${order.id})">
                 <div class="order-list-top">
                     <div class="order-list-top-left">
+                        <div class="order-list-avatar ${avatarColorClass}">${escapeHtml(initials)}</div>
                         <span class="order-list-customer">${escapeHtml(order.customer_name || 'Unnamed Customer')}</span>
                         <span class="order-status-chip completed" title="Completed">Completed</span>
                         ${hasCustomerNumber ? `<span class="order-status-chip account" title="Copy account number" onclick="copyOrderAccountNumber(event, '${encodeURIComponent(String(order.customer_number || ''))}')">Acct ${escapeHtml(order.customer_number)}</span>` : ''}
                         ${streetOnlyAddress ? `<span class="order-status-chip address" title="${escapeHtml(streetOnlyAddress)}">${escapeHtml(streetOnlyAddress)}</span>` : ''}
                     </div>
                     <div class="order-list-actions">
-                        <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
+                        <div class="order-list-icon-actions">
+                            <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
+                        </div>
                         <span class="order-list-id">#${order.id || ''}</span>
                     </div>
                 </div>

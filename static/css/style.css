@@ -817,7 +817,7 @@ body.high-contrast .item-add-style-button:hover {
 .orders-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     padding: var(--padding-medium);
     overflow-y: auto;
     max-height: none;
@@ -832,7 +832,7 @@ body.high-contrast .item-add-style-button:hover {
     color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    padding: 12px;
+    padding: 10px;
     transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
@@ -873,6 +873,26 @@ body.high-contrast .item-add-style-button:hover {
     min-width: 0;
 }
 
+.order-list-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: var(--font-weight-semibold);
+    color: #10131a;
+    flex: none;
+}
+
+.order-list-avatar.a1 { background: #6ee7a8; }
+.order-list-avatar.a2 { background: #f5b45a; }
+.order-list-avatar.a3 { background: #c084f0; }
+.order-list-avatar.a4 { background: #6bb4f7; }
+.order-list-avatar.a5 { background: #7bd7db; }
+.order-list-avatar.a6 { background: #f28b8b; }
+
 .order-list-customer {
     font-weight: var(--font-weight-semibold);
     font-size: var(--font-size-base);
@@ -881,7 +901,23 @@ body.high-contrast .item-add-style-button:hover {
 .order-list-actions {
     display: flex;
     align-items: center;
+    gap: 6px;
+    flex: none;
+}
+
+.order-list-icon-actions {
+    display: flex;
+    align-items: center;
     gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.order-list-item:hover .order-list-icon-actions,
+.order-list-item:focus-within .order-list-icon-actions,
+.order-list-item.is-pinned .order-list-icon-actions,
+.order-list-item.is-flagged .order-list-icon-actions {
+    opacity: 1;
 }
 
 .order-icon-btn {
