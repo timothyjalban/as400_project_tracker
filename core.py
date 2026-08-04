@@ -8,6 +8,7 @@ circular import back to app.py (which imports and registers blueprints).
 """
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 AUTH_DISABLE_LOGIN = (os.environ.get('ORDER_TRACKER_DISABLE_AUTH', '0') or '0').strip().lower() in ('1', 'true', 'yes', 'on')
 DESKTOP_HELPER_LOCAL_ONLY = (os.environ.get('ORDER_TRACKER_DESKTOP_HELPER_LOCAL_ONLY', '1') or '1').strip().lower() in ('1', 'true', 'yes', 'on')
+CUSTOMER_INTAKE_API_KEY = (os.environ.get('ORDER_TRACKER_CUSTOMER_INTAKE_API_KEY', '') or '').strip()
 
 
 def _is_local_request() -> bool:
@@ -53,6 +55,18 @@ def _is_admin() -> bool:
     if AUTH_DISABLE_LOGIN:
         return True
     return session.get('role') == 'admin'
+
+
+def _is_customer_intake_authenticated() -> bool:
+    """Separate, narrowly-scoped auth for the customer-intake API - a shared
+    secret rather than a login session, since the caller is another service,
+    not a logged-in staff member."""
+    if not CUSTOMER_INTAKE_API_KEY:
+        return False
+    provided = (request.headers.get('X-Intake-Api-Key') or '').strip()
+    if not provided:
+        return False
+    return hmac.compare_digest(provided, CUSTOMER_INTAKE_API_KEY)
 
 
 def _is_writable_parent(path: Path) -> bool:

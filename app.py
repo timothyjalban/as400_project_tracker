@@ -96,6 +96,7 @@ from core import (
     DESKTOP_HELPER_LOCAL_ONLY,
     _is_local_request,
     _is_admin,
+    _is_customer_intake_authenticated,
     DB_PATH,
     DESKTOP_HELPER_BASE_URL,
     call_desktop_helper,
@@ -156,6 +157,8 @@ from blueprints.import_export import import_export_bp
 app.register_blueprint(import_export_bp)
 from blueprints.orders import orders_bp
 app.register_blueprint(orders_bp)
+from blueprints.customer_intake import customer_intake_bp
+app.register_blueprint(customer_intake_bp)
 
 
 
@@ -240,6 +243,11 @@ def _is_authenticated() -> bool:
 def security_before_request():
     public_paths = {'/', '/login'}
     if request.path in public_paths or request.path.startswith('/static/'):
+        return None
+
+    if request.path.startswith('/api/customer-intake/'):
+        if not _is_customer_intake_authenticated():
+            return jsonify({'success': False, 'error': 'Invalid or missing API key'}), 401
         return None
 
     if not _is_authenticated():
