@@ -28,8 +28,8 @@ async function selectOrder(orderId) {
     selectedOrderId = Number(orderId);
 
     const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-    renderOrdersTable(activeOrders);
-    renderCompletedOrders(completedOrders);
+    renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+    renderCompletedOrders();
 
     const hydrated = await hydrateOrderFromServer(selectedOrderId);
     if (selectedOrderId !== Number(orderId)) return;
@@ -41,8 +41,8 @@ async function selectOrder(orderId) {
     }
 
     const splitAfterHydrate = splitOrdersByArchiveStatus(allOrders);
-    renderOrdersTable(splitAfterHydrate.activeOrders);
-    renderCompletedOrders(splitAfterHydrate.completedOrders);
+    renderOrdersTable(getOrdersForMainList(splitAfterHydrate.activeOrders, splitAfterHydrate.completedOrders));
+    renderCompletedOrders();
     renderSalesProcess(selectedOrder);
 }
 
@@ -174,8 +174,8 @@ async function moveSelectedOrderStage(direction) {
         allOrders = sortOrdersForList(allOrders.map(item => item.id === order.id ? result.order : item));
         openProcessStages = new Set([nextStage]);
         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-        renderOrdersTable(activeOrders);
-        renderCompletedOrders(completedOrders);
+        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+        renderCompletedOrders();
         renderSalesProcess(getSelectedOrder());
         hideError();
         showToast(`Stage updated to ${formatStageLabel(nextStage)}`);
@@ -213,8 +213,8 @@ async function updateOrderListBoolean(orderId, fieldName, value, successMessage)
         );
 
         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-        renderOrdersTable(activeOrders);
-        renderCompletedOrders(completedOrders);
+        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+        renderCompletedOrders();
         renderSalesProcess(getSelectedOrder());
         showToast(successMessage);
         hideError();

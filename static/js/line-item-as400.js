@@ -190,10 +190,13 @@ function macroItemValue(item, ...keys) {
     return '';
 }
 
+// Vendor SKUs the AS400 rejects if they reach an automation payload.
+const INVALID_VENDOR_SKUS = new Set(['1001']);
+
 function sanitizeVendorSku(value) {
     const cleaned = String(value || '').trim();
     if (!cleaned) return '';
-    return cleaned;
+    return INVALID_VENDOR_SKUS.has(cleaned) ? '' : cleaned;
 }
 
 function getBypassDoorSkuForCtrlAltS(item) {

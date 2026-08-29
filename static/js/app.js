@@ -382,8 +382,8 @@ function applyUpdatedOrderLocally(order) {
 
 function refreshOrderListAndProcess() {
     const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-    renderOrdersTable(activeOrders);
-    renderCompletedOrders(completedOrders);
+    renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+    renderCompletedOrders();
     renderSalesProcess(getSelectedOrder());
 }
 

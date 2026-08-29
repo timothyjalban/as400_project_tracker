@@ -435,7 +435,7 @@ async function createQuote(groupName = null) {
         ? await ensureAdditionalQuoteForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
         : null;
     const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
-    const fallbackVendorSku = lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || automationOrder.vendor_sku || '';
+    const fallbackVendorSku = sanitizeVendorSku(lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || automationOrder.vendor_sku || '');
     const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || automationOrder.vendor || '';
     
     // Check if desktop helper is available
@@ -508,8 +508,8 @@ async function createQuote(groupName = null) {
                     if (savedOrder) {
                         Object.assign(actionOrder, savedOrder);
                         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-                        renderOrdersTable(activeOrders);
-                        renderCompletedOrders(completedOrders);
+                        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+                        renderCompletedOrders();
                         renderSalesProcess(getSelectedOrder());
                     }
                 }
@@ -586,7 +586,7 @@ async function createInvoice(groupName = null) {
         ? await ensureAdditionalInvoiceForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
         : null;
     const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
-    const fallbackVendorSku = lineItemsForAutomation.find(item => item?.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '';
+    const fallbackVendorSku = sanitizeVendorSku(lineItemsForAutomation.find(item => item?.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '');
     const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || actionOrder.vendor || '';
     const groupQuoteNumber = getQuoteNumberForAs400Group(actionOrder, normalizedGroupName) || actionOrder.quote_number || '';
     const groupInvoiceNumber = Number.isInteger(groupedInvoiceIndex)
@@ -657,8 +657,8 @@ async function createInvoice(groupName = null) {
                     if (savedOrder) {
                         Object.assign(actionOrder, savedOrder);
                         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-                        renderOrdersTable(activeOrders);
-                        renderCompletedOrders(completedOrders);
+                        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+                        renderCompletedOrders();
                         renderSalesProcess(getSelectedOrder());
                     }
                 }

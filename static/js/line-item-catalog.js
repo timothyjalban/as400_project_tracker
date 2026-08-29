@@ -100,7 +100,9 @@ function normalizeVendorKey(name) {
 
 function getVendorSkuForName(name) {
     const key = normalizeVendorKey(name);
-    return key ? (vendorSkuByName[key] || '') : '';
+    if (!key) return '';
+    if (key === 'milgard') return '660509';
+    return sanitizeVendorSku(vendorSkuByName[key] || '');
 }
 
 function mergeVendorOptionsWithCatalog(baseOptions) {
@@ -119,7 +121,9 @@ async function loadVendorCatalog() {
             const name = String(vendor?.name || '').trim();
             if (!name) return;
             const key = normalizeVendorKey(name);
-            vendorSkuByName[key] = vendor?.sku != null ? String(vendor.sku) : '';
+            vendorSkuByName[key] = key === 'milgard'
+                ? '660509'
+                : sanitizeVendorSku(vendor?.sku != null ? String(vendor.sku) : '');
         });
 
         const vendorNames = data.vendors

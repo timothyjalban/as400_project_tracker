@@ -279,8 +279,8 @@ async function jumpToStage(stage) {
         allOrders = sortOrdersForList(allOrders.map(item => item.id === order.id ? result.order : item));
         openProcessStages = new Set([stage]);
         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-        renderOrdersTable(activeOrders);
-        renderCompletedOrders(completedOrders);
+        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+        renderCompletedOrders();
         renderSalesProcess(getSelectedOrder());
         requestAnimationFrame(() => scrollToProcessStage(stage));
         hideError();

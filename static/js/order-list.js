@@ -99,8 +99,8 @@ async function loadOrders() {
                 }
             }
 
-            renderOrdersTable(activeOrders);
-            renderCompletedOrders(completedOrders);
+            renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+            renderCompletedOrders();
             renderSalesProcess(getSelectedOrder());
             updateOrdersCount(data.count, activeOrders.length, completedOrders.length);
         } else {
@@ -127,6 +127,16 @@ function splitOrdersByArchiveStatus(orders) {
     });
 
     return { activeOrders, completedOrders };
+}
+
+// When "show completed" is ticked, completed orders are shown inline in the
+// main list (tagged with a "Completed" chip) rather than in a separate panel.
+function getOrdersForMainList(activeOrders, completedOrders) {
+    if (showCompletedCheckbox && showCompletedCheckbox.checked) {
+        return [...activeOrders, ...completedOrders];
+    }
+
+    return activeOrders;
 }
 
 function sortOrdersForList(orders) {
@@ -180,12 +190,14 @@ function renderOrdersTable(orders) {
 
     ordersList.innerHTML = sortedOrders.map(order => {
         const isActive = order.id === selectedOrderId;
+        const isArchived = Number(order.archived || 0) === 1;
         const isPinned = Number(order.is_pinned || 0) === 1;
         const isFlagged = Number(order.is_flagged || 0) === 1;
         const hasCustomerNumber = Boolean(String(order.customer_number || '').trim());
         const streetOnlyAddress = getStreetOnlyAddress(order);
         const itemClasses = [
             'order-list-item',
+            isArchived ? 'completed-order-item' : '',
             isActive ? 'active' : '',
             isPinned ? 'is-pinned' : '',
             isFlagged ? 'is-flagged' : ''
@@ -200,6 +212,7 @@ function renderOrdersTable(orders) {
                     <div class="order-list-top-left">
                         <div class="order-list-avatar ${avatarColorClass}">${escapeHtml(initials)}</div>
                         <span class="order-list-customer">${escapeHtml(order.customer_name || 'Unnamed Customer')}</span>
+                        ${isArchived ? '<span class="order-status-chip completed" title="Completed">Completed</span>' : ''}
                         ${isPinned ? '<span class="order-status-chip pinned" title="Pinned">Pinned</span>' : ''}
                         ${isFlagged ? '<span class="order-status-chip flagged" title="Flagged">Flagged</span>' : ''}
                         ${hasCustomerNumber ? `<span class="order-status-chip account" title="Copy account number" onclick="copyOrderAccountNumber(event, '${encodeURIComponent(String(order.customer_number || ''))}')">Acct ${escapeHtml(order.customer_number)}</span>` : ''}
@@ -224,65 +237,12 @@ function renderOrdersTable(orders) {
     }).join('');
 }
 
-function renderCompletedOrders(orders) {
-    if (!completedOrdersPanel || !completedOrdersList || !showCompletedCheckbox) return;
-
-    if (!showCompletedCheckbox.checked) {
-        completedOrdersPanel.style.display = 'none';
-        return;
-    }
-
-    completedOrdersPanel.style.display = 'block';
-    if (completedOrdersCount) {
-        completedOrdersCount.textContent = `${orders.length}`;
-    }
-
-    if (orders.length === 0) {
-        completedOrdersList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">✅</div>
-                <p>No completed orders found</p>
-            </div>
-        `;
-
-        return;
-    }
-    completedOrdersList.innerHTML = orders.map(order => {
-        const isActive = order.id === selectedOrderId;
-        const hasCustomerNumber = Boolean(String(order.customer_number || '').trim());
-        const streetOnlyAddress = getStreetOnlyAddress(order);
-        const itemClasses = ['order-list-item', 'completed-order-item', isActive ? 'active' : '']
-            .filter(Boolean)
-            .join(' ');
-
-        const initials = getOrderInitials(order.customer_name);
-        const avatarColorClass = getOrderAvatarColorClass(order);
-
-        return `
-            <div class="${itemClasses}" role="button" tabindex="0" onclick="selectOrder(${order.id})" ondblclick="viewOrderDetails(${order.id})" onkeydown="handleOrderListItemKey(event, ${order.id})">
-                <div class="order-list-top">
-                    <div class="order-list-top-left">
-                        <div class="order-list-avatar ${avatarColorClass}">${escapeHtml(initials)}</div>
-                        <span class="order-list-customer">${escapeHtml(order.customer_name || 'Unnamed Customer')}</span>
-                        <span class="order-status-chip completed" title="Completed">Completed</span>
-                        ${hasCustomerNumber ? `<span class="order-status-chip account" title="Copy account number" onclick="copyOrderAccountNumber(event, '${encodeURIComponent(String(order.customer_number || ''))}')">Acct ${escapeHtml(order.customer_number)}</span>` : ''}
-                        ${streetOnlyAddress ? `<span class="order-status-chip address" title="${escapeHtml(streetOnlyAddress)}">${escapeHtml(streetOnlyAddress)}</span>` : ''}
-                    </div>
-                    <div class="order-list-actions">
-                        <div class="order-list-icon-actions">
-                            <button class="order-icon-btn" title="Add reminder" onclick="openReminderForOrder(event, ${order.id})">⏰</button>
-                        </div>
-                        <span class="order-list-id">#${order.id || ''}</span>
-                    </div>
-                </div>
-                <div class="order-list-project">${escapeHtml(order.project_name || 'No project name')}</div>
-                <div class="order-list-meta">
-                    <span class="stage-badge">${escapeHtml(formatStageLabel(order.stage || ''))}</span>
-                    <span>${escapeHtml(order.po_numbers_display || order.po_numbers || order.po_number || 'No PO')}</span>
-                </div>
-            </div>
-        `;
-    }).join('');
+// Completed orders now render inline in the main list (see getOrdersForMainList),
+// so the separate completed panel is always hidden. Kept as a no-op so existing
+// call sites don't need to special-case it.
+function renderCompletedOrders() {
+    if (!completedOrdersPanel) return;
+    completedOrdersPanel.style.display = 'none';
 }
 
 function getSelectedOrder() {

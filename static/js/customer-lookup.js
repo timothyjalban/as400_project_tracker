@@ -175,8 +175,8 @@ async function editSelectedOrderCustomerNumber(event) {
         if (inlineField) inlineField.value = result.order.customer_number || '';
 
         const { activeOrders, completedOrders } = splitOrdersByArchiveStatus(allOrders);
-        renderOrdersTable(activeOrders);
-        renderCompletedOrders(completedOrders);
+        renderOrdersTable(getOrdersForMainList(activeOrders, completedOrders));
+        renderCompletedOrders();
         renderSalesProcess(getSelectedOrder());
         hideError();
         showToast(customerNumber ? 'Account number updated' : 'Account number cleared');
