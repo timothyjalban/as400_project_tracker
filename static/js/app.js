@@ -196,7 +196,7 @@ const AS400_COMMENT_PREF_FIELD_LABELS = {
     style: 'Style',
     material: 'Material',
     finType: 'Frame / Fin Type (windows)',
-    color: 'Color',
+    hingeFinish: 'Hinge Finish',
     glass: 'Glass',
     argon: 'Argon',
     temperedGlass: 'Tempered Glass',
@@ -310,7 +310,8 @@ const INLINE_ORDER_FIELDS = {
     po_date_signed: 'inline_po_date_signed',
     vendor_ack_number: 'inline_vendor_ack_number',
     vendor_ack_total: 'inline_vendor_ack_total',
-    eta_date: 'inline_eta_date'
+    eta_date: 'inline_eta_date',
+    needs_install: 'inline_needs_install'
 };
 
 const STAGE_SMART_FIELD_MAP = {
@@ -830,6 +831,14 @@ function commitAllLineItemControls() {
 
         if (control.tagName === 'SELECT' && isAddNewLineItemOption(field, value)) return;
 
+        // Skip fields whose displayed value already matches stored state -
+        // this loop exists to catch in-progress edits in a still-focused
+        // control, not to re-run every field's change side effects (e.g.
+        // re-deriving vendor_sku from an unchanged blank vendor would wipe
+        // an explicitly-set sku like the auto-added Install line item's).
+        const currentItem = currentLineItems[index];
+        if (currentItem && currentItem[field] === value) return;
+
         updateLineItem(index, field, value, { suppressRender: true, autosave: false });
     });
 
@@ -1084,6 +1093,12 @@ function populateInlineOrderForm(order) {
     const inlineStage = document.getElementById(INLINE_ORDER_FIELDS.stage);
     const inlinePriority = document.getElementById(INLINE_ORDER_FIELDS.priority_manual);
     syncPriorityInputWithStage(inlineStage, inlinePriority, order?.stage || stageSelect.value);
+
+    const needsInstallToggle = document.getElementById('inline_needs_install_toggle');
+    const needsInstallHidden = document.getElementById(INLINE_ORDER_FIELDS.needs_install);
+    if (needsInstallToggle) {
+        needsInstallToggle.checked = String(needsInstallHidden?.value || '').trim() === '1';
+    }
 
     loadAdditionalQuotesFromOrder(order);
     ensureAdditionalQuoteRowsForOrderGroups(order);

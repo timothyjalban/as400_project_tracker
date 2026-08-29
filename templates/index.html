@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260731-4') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260805-2') }}">
 </head>
 <body>
     <div class="container">
@@ -186,59 +186,10 @@
                     <div class="detail-tabs" role="tablist">
                         <button type="button" class="detail-tab active" id="detailTabBtnSalesProcess" data-tab-target="detailTabSalesProcess" role="tab" aria-selected="true">Sales Process</button>
                         <button type="button" class="detail-tab" id="detailTabBtnOrderDetails" data-tab-target="detailTabOrderDetails" role="tab" aria-selected="false">Order Details</button>
+                        <button type="button" class="detail-tab" id="detailTabBtnOrderItems" data-tab-target="detailTabOrderItems" role="tab" aria-selected="false">Order Items</button>
                     </div>
 
                     <div id="detailTabSalesProcess" class="detail-tab-panel active" role="tabpanel" aria-labelledby="detailTabBtnSalesProcess">
-                    <div class="items-type-actions items-top-actions">
-                        <button type="button" id="addDoorItemBtn" class="btn btn-primary">+ Door</button>
-                        <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
-                        <button type="button" id="addHardwareItemBtn" class="btn btn-secondary">+ Hardware</button>
-                    </div>
-
-                    <div id="orderItemsContainerCard" class="items-editor-card">
-                        <div class="process-editor-header">
-                            <h3>Order Items</h3>
-                            <div class="items-editor-header-right">
-                                <span class="items-editor-subtitle">Start with Door, Window, or Hardware, then add details</span>
-                                <button type="button" id="as400CommentPrefsBtn" class="items-collapse-btn" title="Choose which fields appear in AS400 comments">⚙ Comment Fields</button>
-                                <button type="button" id="toggleItemsContainerBtn" class="items-collapse-btn" aria-expanded="true">Collapse</button>
-                            </div>
-                        </div>
-                        <div id="orderItemsContainerBody" class="items-editor-body">
-                            <!-- Bulk Set Panel -->
-                            <div id="bulkSetPanel" class="bulk-set-panel" style="display:none;">
-                                <div class="bulk-set-header">
-                                    <span class="bulk-set-title">⚡ Bulk Set Attribute</span>
-                                    <button type="button" id="bulkSetCloseBtn" class="bulk-set-close-btn" title="Close">✕</button>
-                                </div>
-                                <div class="bulk-set-controls">
-                                    <div class="bulk-set-field-group">
-                                        <label for="bulkSetField">Attribute</label>
-                                        <select id="bulkSetField"></select>
-                                    </div>
-                                    <div class="bulk-set-field-group">
-                                        <label for="bulkSetValue">Value</label>
-                                        <div id="bulkSetValueWrapper"></div>
-                                    </div>
-                                    <div class="bulk-set-actions">
-                                        <button type="button" id="bulkSetApplyAll" class="btn btn-primary">Apply to All</button>
-                                        <button type="button" id="bulkSetApplyDoors" class="btn btn-secondary">Doors Only</button>
-                                        <button type="button" id="bulkSetApplyWindows" class="btn btn-secondary">Windows Only</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="bulk-set-toggle-row">
-                                <button type="button" id="bulkSetToggleBtn" class="bulk-set-toggle-btn">⚡ Bulk Set</button>
-                            </div>
-                            <div id="lineItemsList" class="line-items-list"></div>
-                            <div class="items-type-actions items-bottom-actions">
-                                <button type="button" id="addDoorItemBottomBtn" class="btn btn-primary">+ Door</button>
-                                <button type="button" id="addWindowItemBottomBtn" class="btn btn-secondary">+ Window</button>
-                                <button type="button" id="addHardwareItemBottomBtn" class="btn btn-secondary">+ Hardware</button>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="process-timeline-card">
                         <div class="process-editor-header">
                             <h3>Sales Process</h3>
@@ -312,6 +263,13 @@
                             <div class="form-group">
                                 <label for="inline_customer_name">Customer Name *</label>
                                 <input type="text" id="inline_customer_name" name="customer_name" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="inline_needs_install_toggle" onchange="handleNeedsInstallToggle(this.checked)">
+                                    <span>Needs Install</span>
+                                </label>
+                                <small class="field-hint">Adds an Install line item (SKU 661808) to the order.</small>
                             </div>
                             <div class="form-group">
                                 <label for="inline_customer_phone">Phone</label>
@@ -435,6 +393,58 @@
                                 <input type="date" id="inline_eta_date" name="eta_date">
                             </div>
                         </form>
+                    </div>
+                    </div>
+
+                    <div id="detailTabOrderItems" class="detail-tab-panel" role="tabpanel" aria-labelledby="detailTabBtnOrderItems" style="display: none;">
+                    <div class="items-type-actions items-top-actions">
+                        <button type="button" id="addDoorItemBtn" class="btn btn-primary">+ Door</button>
+                        <button type="button" id="addWindowItemBtn" class="btn btn-secondary">+ Window</button>
+                        <button type="button" id="addHardwareItemBtn" class="btn btn-secondary">+ Hardware</button>
+                    </div>
+
+                    <div id="orderItemsContainerCard" class="items-editor-card">
+                        <div class="process-editor-header">
+                            <h3>Order Items</h3>
+                            <div class="items-editor-header-right">
+                                <span class="items-editor-subtitle">Start with Door, Window, or Hardware, then add details</span>
+                                <button type="button" id="as400CommentPrefsBtn" class="items-collapse-btn" title="Choose which fields appear in AS400 comments">⚙ Comment Fields</button>
+                                <button type="button" id="toggleItemsContainerBtn" class="items-collapse-btn" aria-expanded="true">Collapse</button>
+                            </div>
+                        </div>
+                        <div id="orderItemsContainerBody" class="items-editor-body">
+                            <!-- Bulk Set Panel -->
+                            <div id="bulkSetPanel" class="bulk-set-panel" style="display:none;">
+                                <div class="bulk-set-header">
+                                    <span class="bulk-set-title">⚡ Bulk Set Attribute</span>
+                                    <button type="button" id="bulkSetCloseBtn" class="bulk-set-close-btn" title="Close">✕</button>
+                                </div>
+                                <div class="bulk-set-controls">
+                                    <div class="bulk-set-field-group">
+                                        <label for="bulkSetField">Attribute</label>
+                                        <select id="bulkSetField"></select>
+                                    </div>
+                                    <div class="bulk-set-field-group">
+                                        <label for="bulkSetValue">Value</label>
+                                        <div id="bulkSetValueWrapper"></div>
+                                    </div>
+                                    <div class="bulk-set-actions">
+                                        <button type="button" id="bulkSetApplyAll" class="btn btn-primary">Apply to All</button>
+                                        <button type="button" id="bulkSetApplyDoors" class="btn btn-secondary">Doors Only</button>
+                                        <button type="button" id="bulkSetApplyWindows" class="btn btn-secondary">Windows Only</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bulk-set-toggle-row">
+                                <button type="button" id="bulkSetToggleBtn" class="bulk-set-toggle-btn">⚡ Bulk Set</button>
+                            </div>
+                            <div id="lineItemsList" class="line-items-list"></div>
+                            <div class="items-type-actions items-bottom-actions">
+                                <button type="button" id="addDoorItemBottomBtn" class="btn btn-primary">+ Door</button>
+                                <button type="button" id="addWindowItemBottomBtn" class="btn btn-secondary">+ Window</button>
+                                <button type="button" id="addHardwareItemBottomBtn" class="btn btn-secondary">+ Hardware</button>
+                            </div>
+                        </div>
                     </div>
                     </div>
 
@@ -1300,11 +1310,11 @@
         ↑ Top
     </button>
 
-    <script src="{{ url_for('static', filename='js/app.js', v='20260731-2') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-items.js', v='20260731-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260805-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-items.js', v='20260820-1') }}"></script>
     <script src="{{ url_for('static', filename='js/line-item-catalog.js', v='20260717-2') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260731-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-as400.js', v='20260731-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260820-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-as400.js', v='20260805-3') }}"></script>
     <script src="{{ url_for('static', filename='js/attachments.js', v='20260630-2') }}"></script>
     <script src="{{ url_for('static', filename='js/notes.js', v='20260630-2') }}"></script>
     <script src="{{ url_for('static', filename='js/reminders.js', v='20260729-1') }}"></script>
@@ -1312,7 +1322,7 @@
     <script src="{{ url_for('static', filename='js/ocr-import.js', v='20260729-1') }}"></script>
     <script src="{{ url_for('static', filename='js/customer-lookup.js', v='20260729-1') }}"></script>
     <script src="{{ url_for('static', filename='js/additional-tracking.js', v='20260730-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/order-modal.js', v='20260730-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/order-modal.js', v='20260820-1') }}"></script>
     <script src="{{ url_for('static', filename='js/customer-history.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/export-backup.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/stage-actions.js', v='20260730-1') }}"></script>
@@ -1320,7 +1330,7 @@
     <script src="{{ url_for('static', filename='js/autocomplete.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/order-list.js', v='20260731-1') }}"></script>
     <script src="{{ url_for('static', filename='js/order-selection.js', v='20260730-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/stage-details-rendering.js', v='20260731-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/stage-details-rendering.js', v='20260820-1') }}"></script>
 </body>
 </html>
 

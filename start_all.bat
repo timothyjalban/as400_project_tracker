@@ -13,11 +13,12 @@ echo.
 
 cd /d "%~dp0"
 
-if exist "C:\Projects\Order-Tracker\orders.db" (
-	set "ORDER_TRACKER_DB_PATH=C:\Projects\Order-Tracker\orders.db"
-) else (
-	set "ORDER_TRACKER_DB_PATH=C:\tmp\orders.db"
-)
+set "ORDER_TRACKER_DB_PATH=C:\Users\tim.alban\Desktop\HTML_Order_Tracker\orders.db"
+
+rem --- Secrets: real values live in secrets.local.bat (gitignored).
+rem     Copy secrets.local.bat.example to secrets.local.bat and fill it in.
+set "ORDER_TRACKER_CUSTOMER_INTAKE_API_KEY=CHANGE_ME"
+if exist "%~dp0secrets.local.bat" call "%~dp0secrets.local.bat"
 
 if exist "%~dp0.venv\Scripts\python.exe" (
 	set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"

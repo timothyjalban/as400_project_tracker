@@ -3,7 +3,7 @@
 // Depends on line-items.js and line-item-catalog.js for active item state and option lists.
 // ── Bulk Set ────────────────────────────────────────────────────────────────
 // Persists across the current order session; applied to every new item added.
-const bulkSetDefaults = { door: {}, window: {}, hardware: {} };
+const bulkSetDefaults = { door: {}, window: {}, hardware: {}, groups: {} };
 const BULK_SET_DEFAULTS_STORAGE_PREFIX = 'order_tracker_bulk_defaults_';
 const BULK_SNAPSHOT_STORAGE_PREFIX = 'order_tracker_bulk_snapshot_';
 const BULK_DEFAULT_GROUPS_KEY = '__groups__';
@@ -22,15 +22,32 @@ const BULK_SET_FIELDS = [
     { value: 'argon',          label: 'Argon',           type: 'select',   scope: 'both',   options: ['Argon'] },
     // door-only
     { value: 'material',       label: 'Material',        type: 'select',   scope: 'door',   options: ['Wood', 'Primed', 'Fiberglass', 'Steel', 'Vinyl'] },
+    { value: 'door_texture',   label: 'Texture',         type: 'select',   scope: 'door',   options: ['Smooth-Star', 'Classic Craft Fir Grain', 'Classic Craft Mahogany Grain', 'Classic Craft Canvas', 'Fiber-Classic Oak Collection', 'Fiber-Classic Mahogany Collection', 'Traditions', 'Profiles'] },
     { value: 'core',           label: 'Core',            type: 'select',   scope: 'door',   options: ['Hollow Core', 'Solid Core'] },
-    { value: 'sticking',       label: 'Sticking',        type: 'select',   scope: 'door',   options: ['Ovolo', 'Shaker'] },
+    { value: 'sticking',       label: 'Sticking',        type: 'select',   scope: 'door',   options: ['Square', 'Ovolo', 'Shaker'] },
     { value: 'swing',          label: 'Swing',           type: 'select',   scope: 'door',   options: ['LH', 'RH', 'LH Outswing', 'RH Outswing'] },
     { value: 'thickness',      label: 'Thickness',       type: 'select',   scope: 'door',   options: ['1-3/8"', '1-3/4"'] },
     { value: 'jamb_size',      label: 'Jamb Size',       type: 'select',   scope: 'door' },
+    { value: 'glass_tint',     label: 'Glass Tint',      type: 'select',   scope: 'door',   options: ['Clear', 'Obscure', 'Low-E', 'Tempered'] },
+    { value: 'door_glass_shape', label: 'Lite Shape',    type: 'text',     scope: 'door' },
+    { value: 'door_glass_lite_style', label: 'Lite Style', type: 'text',   scope: 'door' },
+    { value: 'door_frame_profile', label: 'Lite Frame',  type: 'select',   scope: 'door',   options: ['Flat Lite Frame', 'Scrolled Lite Frame'] },
+    { value: 'finish_type',    label: 'Finish Type',     type: 'select',   scope: 'door',   options: ['Primed', 'Unfinished', 'Prefinished'] },
+    { value: 'finish_detail',  label: 'Wood Species / Stain Color', type: 'text', scope: 'door' },
+    { value: 'panel_style',    label: 'Panel Style',     type: 'select',   scope: 'door',   options: ['1 Panel', '2 Panel', '3 Panel', '4 Panel', '5 Panel', '6 Panel', '1 Lite', '2 Lite', '3 Lite', '5 Lite', '10 Lite', '15 Lite', 'Louver', 'Plank'] },
+    { value: 'boring',         label: 'Boring',          type: 'select',   scope: 'door',   options: ['Single', 'Double', 'None'] },
+    { value: 'hinge_size',     label: 'Hinge Size',      type: 'select',   scope: 'door',   options: ['3"', '3-1/2"', '4"', '4-1/2"'] },
+    { value: 'hinge_finish',   label: 'Hinge Finish',    type: 'select',   scope: 'door',   options: ['Satin Nickel', 'Oil-Rubbed Bronze', 'Bright Brass', 'Polished Chrome', 'Brushed Chrome', 'Black'] },
+    { value: 'exterior_trim',  label: 'Exterior Trim',   type: 'select',   scope: 'door',   options: ['Brickmould', 'No Exterior Trim'] },
+    { value: 'sill',           label: 'Sill',            type: 'text',     scope: 'door' },
+    { value: 'hardware_option', label: 'Hardware',       type: 'select',   scope: 'door',   options: ['Standard', 'Lever', 'Knob', 'Deadbolt'] },
+    { value: 'qlon',           label: 'Q-lon Weatherstripping', type: 'checkbox', scope: 'door' },
     // window-only
     { value: 'operation',      label: 'Handing',         type: 'select',   scope: 'window' },
     { value: 'frame',          label: 'Frame',           type: 'select',   scope: 'window', options: ['Vinyl', 'Wood', 'Aluminum', 'Fiberglass'] },
-    { value: 'glass',          label: 'Glass / Lites',   type: 'select',   scope: 'both', options: ['None', '1 LT', '2 LT', '3 LT', '4 LT', '6 LT', '9 LT', 'Clear', 'Low-E', 'Tempered', 'Obscure'] },
+    // Doors' lite count now lives in panel_style (1 Lite/2 Lite/...) --
+    // this field is window-only to avoid the two disagreeing on a door.
+    { value: 'glass',          label: 'Glass',           type: 'select',   scope: 'window', options: ['Clear', 'Low-E', 'Obscure'] },
     { value: 'tempered_glass', label: 'Tempered Glass',  type: 'checkbox', scope: 'window' },
     // text / numeric
     { value: 'width',          label: 'Width',           type: 'text',     scope: 'both' },
@@ -171,34 +188,63 @@ function getBulkGroupNameForItem(item) {
     return normalized || 'Ungrouped';
 }
 
-function getBulkGroupDefaults(itemType, groupName) {
-    const typeDefaults = getBulkDefaultsForType(itemType);
-    if (!typeDefaults[BULK_DEFAULT_GROUPS_KEY] || typeof typeDefaults[BULK_DEFAULT_GROUPS_KEY] !== 'object') {
-        typeDefaults[BULK_DEFAULT_GROUPS_KEY] = {};
+// Group (star) defaults are shared across door/window/hardware because a single
+// AS400 group card can contain a mix of item types - keying this by item type as
+// well (as the old per-type __groups__ bucket did) meant starring a field on a
+// door left same-group windows/hardware un-starred.
+function getBulkGroupDefaults(groupName) {
+    if (!bulkSetDefaults.groups || typeof bulkSetDefaults.groups !== 'object') {
+        bulkSetDefaults.groups = {};
     }
 
     const normalizedGroup = String(groupName || 'Ungrouped').trim() || 'Ungrouped';
-    if (!typeDefaults[BULK_DEFAULT_GROUPS_KEY][normalizedGroup] || typeof typeDefaults[BULK_DEFAULT_GROUPS_KEY][normalizedGroup] !== 'object') {
-        typeDefaults[BULK_DEFAULT_GROUPS_KEY][normalizedGroup] = {};
+    if (!bulkSetDefaults.groups[normalizedGroup] || typeof bulkSetDefaults.groups[normalizedGroup] !== 'object') {
+        bulkSetDefaults.groups[normalizedGroup] = {};
     }
 
-    return typeDefaults[BULK_DEFAULT_GROUPS_KEY][normalizedGroup];
+    return bulkSetDefaults.groups[normalizedGroup];
 }
 
-function hasBulkGroupDefault(itemType, groupName, field) {
-    return Object.prototype.hasOwnProperty.call(getBulkGroupDefaults(itemType, groupName), field);
+function hasBulkGroupDefault(groupName, field) {
+    return Object.prototype.hasOwnProperty.call(getBulkGroupDefaults(groupName), field);
 }
 
-function getBulkGroupDefault(itemType, groupName, field) {
-    return getBulkGroupDefaults(itemType, groupName)[field];
+function getBulkGroupDefault(groupName, field) {
+    return getBulkGroupDefaults(groupName)[field];
 }
 
-function setBulkGroupDefault(itemType, groupName, field, value) {
-    getBulkGroupDefaults(itemType, groupName)[field] = value;
+function setBulkGroupDefault(groupName, field, value) {
+    getBulkGroupDefaults(groupName)[field] = value;
 }
 
-function deleteBulkGroupDefault(itemType, groupName, field) {
-    delete getBulkGroupDefaults(itemType, groupName)[field];
+function deleteBulkGroupDefault(groupName, field) {
+    delete getBulkGroupDefaults(groupName)[field];
+}
+
+// Backfills blank fields on an item from its AS400 group's starred defaults.
+// Called whenever an item's group membership is (re)determined - e.g. the user
+// sets/changes vendor and the item joins an existing starred group - so new or
+// moved items pick up the group's starred values instead of only brand-new
+// items created via the Bulk Set panel's remembered type-level defaults.
+function applyBulkGroupDefaultsToItem(item) {
+    if (!item || item.type === 'install') return;
+
+    const groupName = getBulkGroupNameForItem(item);
+    const groupDefaults = getBulkGroupDefaults(groupName);
+    const itemType = getBulkItemType(item.type);
+
+    Object.entries(groupDefaults).forEach(([field, value]) => {
+        if (value === '' || value === null || value === undefined) return;
+
+        const fieldDef = _getBulkFieldDef(field);
+        if (!isBulkFieldCompatibleWithType(fieldDef, itemType)) return;
+
+        const current = item[field];
+        const isBlank = current === '' || current === null || current === undefined || current === false;
+        if (isBlank) {
+            item[field] = value;
+        }
+    });
 }
 
 function resetBulkDefaults() {
@@ -206,6 +252,7 @@ function resetBulkDefaults() {
     bulkSetDefaults.door = {};
     bulkSetDefaults.window = {};
     bulkSetDefaults.hardware = {};
+    bulkSetDefaults.groups = {};
 }
 
 function setBulkDefaultForFilter(fieldDef, field, value, filter) {
@@ -278,10 +325,36 @@ function _loadBulkDefaultsForOrder(orderId) {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return;
 
+        // Migrates a legacy per-type __groups__ bucket (from before group/star
+        // defaults were shared across door/window/hardware) into the new shared
+        // bulkSetDefaults.groups store.
+        const migrateLegacyGroupDefaults = (legacyGroups) => {
+            if (!legacyGroups || typeof legacyGroups !== 'object') return;
+            Object.entries(legacyGroups).forEach(([groupName, groupFields]) => {
+                if (!groupFields || typeof groupFields !== 'object') return;
+                Object.entries(groupFields).forEach(([field, value]) => {
+                    if (!_getBulkFieldDef(field)) return;
+                    if (!hasBulkGroupDefault(groupName, field)) {
+                        setBulkGroupDefault(groupName, field, value);
+                    }
+                });
+            });
+        };
+
+        if (parsed.groups && typeof parsed.groups === 'object') {
+            Object.entries(parsed.groups).forEach(([groupName, groupFields]) => {
+                if (!groupFields || typeof groupFields !== 'object') return;
+                Object.entries(groupFields).forEach(([field, value]) => {
+                    if (!_getBulkFieldDef(field)) return;
+                    setBulkGroupDefault(groupName, field, value);
+                });
+            });
+        }
+
         if (parsed.door && typeof parsed.door === 'object') {
             Object.entries(parsed.door).forEach(([field, value]) => {
                 if (field === BULK_DEFAULT_GROUPS_KEY && value && typeof value === 'object') {
-                    bulkSetDefaults.door[BULK_DEFAULT_GROUPS_KEY] = value;
+                    migrateLegacyGroupDefaults(value);
                     return;
                 }
                 const def = _getBulkFieldDef(field);
@@ -294,7 +367,7 @@ function _loadBulkDefaultsForOrder(orderId) {
         if (parsed.window && typeof parsed.window === 'object') {
             Object.entries(parsed.window).forEach(([field, value]) => {
                 if (field === BULK_DEFAULT_GROUPS_KEY && value && typeof value === 'object') {
-                    bulkSetDefaults.window[BULK_DEFAULT_GROUPS_KEY] = value;
+                    migrateLegacyGroupDefaults(value);
                     return;
                 }
                 const def = _getBulkFieldDef(field);
@@ -308,7 +381,7 @@ function _loadBulkDefaultsForOrder(orderId) {
         if (parsed.hardware && typeof parsed.hardware === 'object') {
             Object.entries(parsed.hardware).forEach(([field, value]) => {
                 if (field === BULK_DEFAULT_GROUPS_KEY && value && typeof value === 'object') {
-                    bulkSetDefaults.hardware[BULK_DEFAULT_GROUPS_KEY] = value;
+                    migrateLegacyGroupDefaults(value);
                     return;
                 }
                 const def = _getBulkFieldDef(field);
@@ -319,7 +392,7 @@ function _loadBulkDefaultsForOrder(orderId) {
         }
         // Backward compatibility for older flat saved defaults.
         Object.entries(parsed).forEach(([field, value]) => {
-            if (field === 'door' || field === 'window' || field === 'hardware') return;
+            if (field === 'door' || field === 'window' || field === 'hardware' || field === 'groups') return;
             const def = _getBulkFieldDef(field);
             if (!def) return;
             setBulkDefaultForFilter(def, field, value, 'all');
@@ -475,20 +548,24 @@ function applyBulkSetValueToGroup(field, rawValue, sourceItem, options = {}) {
     const fieldDef = _getBulkFieldDef(field);
     if (!fieldDef || !sourceItem) return false;
 
-    const itemType = getBulkItemType(sourceItem.type);
-    if (!isBulkFieldCompatibleWithType(fieldDef, itemType)) return false;
+    const sourceType = getBulkItemType(sourceItem.type);
+    if (!isBulkFieldCompatibleWithType(fieldDef, sourceType)) return false;
 
     const groupName = getBulkGroupNameForItem(sourceItem);
     const normalizedValue = normalizeBulkSetValue(fieldDef, rawValue);
-    saveBulkLineItemsSnapshot({ action: 'bulk-star', field, itemType, groupName, value: normalizedValue });
+    saveBulkLineItemsSnapshot({ action: 'bulk-star', field, groupName, value: normalizedValue });
 
-    setBulkGroupDefault(itemType, groupName, field, normalizedValue);
+    setBulkGroupDefault(groupName, field, normalizedValue);
     _saveBulkDefaultsForOrder(selectedOrderId || currentOrder?.id);
 
+    // Applies to every item in the group regardless of type (door/window/hardware
+    // can share one AS400 group card) as long as the field is valid for that
+    // item's own type - e.g. a shared field like Style or Notes should reach all
+    // of them, while a door-only field still skips windows/hardware in the group.
     let changed = 0;
     currentLineItems.forEach(item => {
-        if (getBulkItemType(item?.type) !== itemType) return;
         if (getBulkGroupNameForItem(item) !== groupName) return;
+        if (!isBulkFieldCompatibleWithType(fieldDef, getBulkItemType(item?.type))) return;
 
         item[field] = normalizedValue;
         changed += 1;
@@ -537,9 +614,8 @@ function decorateLineItemBulkStarButtons() {
         label.classList.add('line-item-label-with-star');
 
         const item = currentLineItems[Number(index)];
-        const itemType = getBulkItemType(item?.type);
         const groupName = getBulkGroupNameForItem(item);
-        const isActive = hasBulkGroupDefault(itemType, groupName, field) && String(getBulkGroupDefault(itemType, groupName, field)) === String(item?.[field] ?? '');
+        const isActive = hasBulkGroupDefault(groupName, field) && String(getBulkGroupDefault(groupName, field)) === String(item?.[field] ?? '');
         const starButton = document.createElement('button');
         starButton.type = 'button';
         starButton.className = `item-bulk-star-button ${isActive ? 'active' : ''}`;
@@ -565,9 +641,8 @@ function decorateLineItemBulkStarButtons() {
         label.classList.add('line-item-label-with-star');
 
         const item = currentLineItems[Number(index)];
-        const itemType = getBulkItemType(item?.type);
         const groupName = getBulkGroupNameForItem(item);
-        const isActive = hasBulkGroupDefault(itemType, groupName, field) && String(getBulkGroupDefault(itemType, groupName, field)) === String(item?.[field] ?? '');
+        const isActive = hasBulkGroupDefault(groupName, field) && String(getBulkGroupDefault(groupName, field)) === String(item?.[field] ?? '');
         const starButton = document.createElement('button');
         starButton.type = 'button';
         starButton.className = `item-bulk-star-button ${isActive ? 'active' : ''}`;
@@ -611,19 +686,17 @@ function bindLineItemBulkStarEvents() {
             const index = parseInt(button.getAttribute('data-item-index'), 10);
             const field = button.getAttribute('data-item-field');
             const sourceItem = currentLineItems[index];
-            const itemType = getBulkItemType(sourceItem?.type);
             const groupName = getBulkGroupNameForItem(sourceItem);
             const isActive = button.classList.contains('active');
 
             if (isActive) {
-                deleteBulkGroupDefault(itemType, groupName, field);
+                deleteBulkGroupDefault(groupName, field);
                 _saveBulkDefaultsForOrder(selectedOrderId || currentOrder?.id);
 
                 lineItemsList.querySelectorAll(`[data-item-field="${field}"][data-item-bulk-star]`)
                     .forEach(btn => {
                         const buttonIndex = parseInt(btn.getAttribute('data-item-index'), 10);
                         const buttonItem = currentLineItems[buttonIndex];
-                        if (getBulkItemType(buttonItem?.type) !== itemType) return;
                         if (getBulkGroupNameForItem(buttonItem) !== groupName) return;
                         btn.classList.remove('active');
                         btn.textContent = '\u2606';
@@ -639,7 +712,6 @@ function bindLineItemBulkStarEvents() {
                     .forEach(btn => {
                         const buttonIndex = parseInt(btn.getAttribute('data-item-index'), 10);
                         const buttonItem = currentLineItems[buttonIndex];
-                        if (getBulkItemType(buttonItem?.type) !== itemType) return;
                         if (getBulkGroupNameForItem(buttonItem) !== groupName) return;
                         btn.classList.add('active');
                         btn.textContent = '\u2605';

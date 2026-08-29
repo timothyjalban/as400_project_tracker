@@ -5,6 +5,17 @@ function normalizeCommentLineText(text) {
     return String(text || '').replace(/\s+/g, ' ').trim();
 }
 
+// A door's lite count now lives in Panel Style (e.g. "3 Lite") -- the old
+// standalone Lites/Glass field was dropped from the door editor as a
+// redundant, independently-editable duplicate of the same value. Falls
+// back to the legacy item.glass value (e.g. "3 LT") for older orders saved
+// before Panel Style existed.
+function doorLitesText(item) {
+    const panelStyleMatch = /^(\d+)\s*Lite$/i.exec(String(item.panel_style || '').trim());
+    if (panelStyleMatch) return `${panelStyleMatch[1]} LT`;
+    return item.glass || '';
+}
+
 function wrapLineWithoutBreakingWords(text, maxChars) {
     const normalized = normalizeCommentLineText(text);
     if (!normalized) return [];
@@ -233,6 +244,7 @@ function resolveVendorSkuForCtrlAltS(item) {
 
 function macroItemType(item) {
     const rawType = String(item?.type || item?.item_type || item?.product || '').trim().toLowerCase();
+    if (rawType.includes('install')) return 'install';
     if (rawType.includes('hardware')) return 'hardware';
     return rawType.includes('window') ? 'window' : 'door';
 }
@@ -450,6 +462,9 @@ function buildCtrlAltSDescription(item) {
     if (!item || typeof item !== 'object') return '';
 
     const itemType = macroItemType(item);
+    if (itemType === 'install') {
+        return 'DeCamp Install';
+    }
     if (itemType === 'hardware') {
         return [
             normalizeMacroText(item.hardware_product_code),
@@ -625,6 +640,13 @@ function buildStandardAs400CommentPreview(item) {
     const roomText = prefs.room ? cleanOptionalText(item.room || item.location) : '';
     const roomLine = roomText ? `ROOM: ${roomText}` : '';
 
+    if (item.type === 'install') {
+        // "DeCamp Install" already appears in the Ctrl+Alt+S Description
+        // field below (see buildCtrlAltSDescription) - no need to repeat it
+        // here as a leading comment line too.
+        return [roomLine, notes].filter(Boolean).join('\n');
+    }
+
     if (item.type === 'hardware') {
         const hardwareLine = [
             cleanOptionalText(item.style || item.hardware_function),
@@ -654,7 +676,7 @@ function buildStandardAs400CommentPreview(item) {
 
         const jambSize = normalizeMacroText(item.jamb_size);
         const swing = normalizeMacroText(item.swing || item.prefit_swing);
-        const lites = normalizeMacroText(item.glass);
+        const lites = normalizeMacroText(doorLitesText(item));
         const slabs = cleanOptionalText(item.bom_door_slabs);
         const mods = cleanOptionalText(item.bom_modifiers);
         const jambFrame = cleanOptionalText([item.bom_jamb_frame, item.bom_jamb_frame_spec].filter(Boolean).join(' '));

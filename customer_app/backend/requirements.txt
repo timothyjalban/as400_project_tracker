@@ -1,0 +1,8 @@
+# Backend API Requirements
+fastapi
+uvicorn
+pydantic>=2.9
+python-multipart
+requests
+selenium>=4.15.0
+webdriver-manager>=4.0.0

@@ -8,6 +8,10 @@ if exist "C:\Projects\Order-Tracker\orders.db" (
 ) else (
 	set "ORDER_TRACKER_DB_PATH=C:\tmp\orders.db"
 )
+rem --- Secrets: real values live in secrets.local.bat (gitignored).
+rem     Copy secrets.local.bat.example to secrets.local.bat and fill it in.
+set "ORDER_TRACKER_CUSTOMER_INTAKE_API_KEY=CHANGE_ME"
+if exist "%~dp0secrets.local.bat" call "%~dp0secrets.local.bat"
 
 echo Using database: %ORDER_TRACKER_DB_PATH%
 echo.

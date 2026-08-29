@@ -1349,6 +1349,19 @@ body.high-contrast .item-add-style-button:hover {
     gap: 6px;
 }
 
+.line-item-install-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: #90caf9;
+    background-color: rgba(33, 150, 243, 0.2);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 4px 10px;
+    flex: none;
+}
+
 .line-item-room-inline {
     margin: 0;
     min-width: 180px;

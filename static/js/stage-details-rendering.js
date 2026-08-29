@@ -982,21 +982,11 @@ function collectStageDetailDraftPayload() {
         payload[fieldName] = normalizeStagePayloadValue(fieldName, rawValue);
     });
 
-    const selectedOrder = getSelectedOrder() || currentOrder || {};
-    const preserveWhenBlank = [
-        'quote_number', 'quote_date', 'quote_total',
-        'quote_number_2', 'quote_date_2', 'quote_total_2',
-        'invoice_number', 'invoice_date', 'invoice_total',
-        'po_numbers', 'po_date_signed', 'vendor', 'vendor_ack_number', 'vendor_ack_total', 'eta_date', 'transfer_location'
-    ];
-    preserveWhenBlank.forEach(fieldName => {
-        if (!Object.prototype.hasOwnProperty.call(payload, fieldName)) return;
-        if (payload[fieldName] !== null && payload[fieldName] !== undefined && String(payload[fieldName]).trim() !== '') return;
-        const existingValue = selectedOrder[fieldName];
-        if (existingValue !== null && existingValue !== undefined && String(existingValue).trim() !== '') {
-            payload[fieldName] = existingValue;
-        }
-    });
+    // A blank stage-detail widget is respected as an intentional clear - it must
+    // not fall back to the order's previously saved value here. (A blank widget
+    // that's just out of sync with a still-filled-in sibling field on the Order
+    // Details tab is already handled above, from the live DOM, by
+    // shouldPreserveInlineValueFromBlankStage - this is not that case.)
 
     return {
         ...payload,

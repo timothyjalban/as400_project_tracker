@@ -15,16 +15,13 @@ function removePhoneFromText(value) {
         .trim();
 }
 
+// Derives customer_phone from the customer_name text when the phone field is
+// left blank (e.g. "John Smith 555-123-4567" typed straight into the name
+// field). This only ever computes a new value from what's currently on the
+// form - it never falls back to a stale value from the previously saved
+// order, so an intentionally-cleared field always saves as cleared.
 function applyRequiredCustomerFallbacks(data, selectedOrder) {
     if (!data || !selectedOrder) return data;
-
-    ['customer_name', 'customer_phone', 'project_name', 'stage'].forEach(field => {
-        const currentValue = data[field];
-        const existingValue = selectedOrder[field];
-        if ((currentValue === null || currentValue === undefined || String(currentValue).trim() === '') && existingValue != null && String(existingValue).trim() !== '') {
-            data[field] = existingValue;
-        }
-    });
 
     if (!data.customer_phone) {
         data.customer_phone = extractPhoneFromText(data.customer_name || selectedOrder.customer_name || '') || null;
@@ -51,18 +48,15 @@ function collectInlineOrderFormData() {
     const data = {};
     const selectedOrder = getSelectedOrder();
 
+    // Save every field exactly as it appears on the form - an intentionally
+    // cleared field must save as cleared, never silently fall back to
+    // whatever was previously saved on the order.
     Object.entries(INLINE_ORDER_FIELDS).forEach(([field, elementId]) => {
         const element = document.getElementById(elementId);
         if (!element) return;
 
         const value = element.value.trim();
-        const existingValue = field === 'po_numbers'
-            ? (selectedOrder?.po_numbers ?? selectedOrder?.po_number ?? null)
-            : (selectedOrder ? selectedOrder[field] : null);
-
-        data[field] = value === '' && existingValue != null && String(existingValue).trim() !== ''
-            ? existingValue
-            : (value === '' ? null : value);
+        data[field] = value === '' ? null : value;
     });
 
     const quoteStageDetails = processTimeline
@@ -90,7 +84,9 @@ function collectInlineOrderFormData() {
     if (data.vendor_ack_total != null && data.vendor_ack_total !== '') data.vendor_ack_total = parseFloat(data.vendor_ack_total);
     if (data.priority_manual != null && data.priority_manual !== '') data.priority_manual = parseInt(data.priority_manual, 10);
 
-    // Inline form is hidden; never let a stale hidden select reset stage.
+    // inline_stage is disabled - it isn't a real editing control, stage only
+    // changes via the Previous/Next/Jump Stage buttons - so never let it submit
+    // a stage value; always defer to the order's actual current stage.
     if (selectedOrder && selectedOrder.stage) {
         data.stage = selectedOrder.stage;
     }
@@ -121,6 +117,12 @@ function collectInlineOrderFormData() {
             data[key] = value;
         }
     });
+
+    // This is a complete, freshly-populated snapshot of every visible field
+    // (see populateInlineOrderForm), so a blank here is an intentional clear -
+    // tells the backend to skip its blank-preserve safety net (same contract
+    // saveOrder() uses for the old popup form; see blueprints/orders.py).
+    data._full_form_save = true;
 
     return data;
 }

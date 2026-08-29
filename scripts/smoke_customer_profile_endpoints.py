@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 def request_json(url: str, method: str = "GET", body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     data = None
-    headers = {}
+    headers = {"Accept": "application/json"}
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -28,7 +28,13 @@ def request_json(url: str, method: str = "GET", body: Optional[Dict[str, Any]] =
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             payload = resp.read().decode("utf-8")
-            return json.loads(payload)
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid JSON response from {url}: {payload[:300]}") from exc
+            if not isinstance(parsed, dict):
+                raise RuntimeError(f"Unexpected JSON shape from {url}: expected object")
+            return parsed
     except urllib.error.HTTPError as exc:
         payload = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"HTTP {exc.code} for {url}: {payload}") from exc
@@ -63,6 +69,7 @@ def run_read_only_checks(base_url: str) -> Dict[str, Any]:
     expect(len(customers) > 0, "Recent search returned no customers")
 
     first = customers[0]
+    expect(isinstance(first, dict), "Recent search first customer payload is not an object")
     print(f"  Found {len(customers)} recent customer(s); using '{first.get('customer_name', 'Unknown')}' for follow-up checks")
 
     print("[2/4] Checking account-only customer search")
@@ -83,7 +90,7 @@ def run_read_only_checks(base_url: str) -> Dict[str, Any]:
     }))
     expect(contact.get("success") is True, "Contact info endpoint did not return success=true")
     info = contact.get("info") or {}
-    expect(info.get("customer_name"), "Contact info payload missing customer_name")
+    expect(bool(info.get("customer_name")), "Contact info payload missing customer_name")
 
     print("[4/4] Checking customer profile endpoint")
     profile_params = {
@@ -96,7 +103,7 @@ def run_read_only_checks(base_url: str) -> Dict[str, Any]:
     expect(profile_result.get("success") is True, "Customer profile endpoint did not return success=true")
     profile = profile_result.get("profile") or {}
     orders = profile_result.get("orders") or []
-    expect(profile.get("customer_name"), "Profile payload missing customer_name")
+    expect(bool(profile.get("customer_name")), "Profile payload missing customer_name")
     expect(isinstance(orders, list), "Profile orders payload is not a list")
 
     print("Read-only checks passed.")
@@ -158,7 +165,10 @@ def main() -> int:
             if profile_id is None:
                 inferred = (results.get("profile") or {}).get("id")
                 expect(bool(inferred), "Could not infer profile id for --allow-write test; pass --profile-id")
-                profile_id = int(inferred)
+                try:
+                    profile_id = int(str(inferred))
+                except (TypeError, ValueError) as exc:
+                    raise RuntimeError(f"Inferred profile id is not a valid integer: {inferred!r}") from exc
             run_write_revert_check(base_url, profile_id)
 
         print("All smoke checks passed.")

@@ -363,6 +363,7 @@ def ensure_orders_schema(conn):
             closed_done_at TEXT,
             install_quote_done_at TEXT,
             install_approved_done_at TEXT,
+            needs_install INTEGER DEFAULT 0,
             install_street TEXT,
             install_city TEXT,
             install_state TEXT,
@@ -582,6 +583,10 @@ def ensure_orders_schema(conn):
         conn.execute("ALTER TABLE orders ADD COLUMN install_approved_done_at TEXT")
         conn.commit()
 
+    if 'needs_install' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN needs_install INTEGER DEFAULT 0")
+        conn.commit()
+
     if 'install_street' not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN install_street TEXT")
         conn.commit()
@@ -628,6 +633,27 @@ def ensure_orders_schema(conn):
 
     if 'address_zip' not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN address_zip TEXT")
+        conn.commit()
+
+    if 'customer_app_payload' not in columns:
+        # Verbatim JSON of the last customer-app submission for this order
+        # (their own selections, not the tracker's mapped/edited copy) --
+        # lets the customer app losslessly reload an order for editing
+        # without needing to reverse-engineer it from the tracker's own
+        # line-item schema.
+        conn.execute("ALTER TABLE orders ADD COLUMN customer_app_payload TEXT")
+        conn.commit()
+
+    if 'orepac_quote_number' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN orepac_quote_number TEXT")
+        conn.commit()
+
+    if 'orepac_price' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN orepac_price TEXT")
+        conn.commit()
+
+    if 'orepac_description' not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN orepac_description TEXT")
         conn.commit()
 
     # Backfill po_numbers for legacy rows that only used po_number.

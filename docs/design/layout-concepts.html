@@ -1,0 +1,953 @@
+<title>Order Tracker — Layout Concepts</title>
+<style>
+  :root {
+    --bg: #0a0d13;
+    --bg-soft: #0e121a;
+    --surface: #141a24;
+    --surface-raised: #1b2331;
+    --surface-hover: #212b3b;
+    --border: #263140;
+    --border-soft: #1c2531;
+    --text: #e9ecf1;
+    --text-muted: #93a0b4;
+    --text-faint: #5c6b81;
+    --accent: #4f8cff;
+    --accent-dim: #2e5aa8;
+    --accent-soft: #16233c;
+    --good: #35c98f;
+    --good-soft: #123024;
+    --warn: #eda23e;
+    --warn-soft: #2e2313;
+    --critical: #f0625f;
+    --critical-soft: #331919;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); }
+
+  ::selection { background: var(--accent-dim); color: #fff; }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+
+  /* ---------- Intro ---------- */
+
+  header.intro {
+    margin-bottom: 64px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-size: 34px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  .intro p {
+    max-width: 62ch;
+    color: var(--text-muted);
+    font-size: 15.5px;
+    margin: 0 0 10px;
+  }
+
+  .note {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 9px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+
+  .note strong { color: var(--text-muted); font-weight: 600; }
+
+  /* ---------- Section scaffolding ---------- */
+
+  section.block {
+    margin-bottom: 72px;
+  }
+
+  .block-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 16px;
+  }
+
+  .block-head h2 {
+    font-size: 21px;
+    font-weight: 650;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  .block-head .idx {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .block-intro {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 72ch;
+    margin: 16px 0 28px;
+  }
+
+  .option-grid {
+    display: grid;
+    gap: 22px;
+  }
+
+  .option-grid.two { grid-template-columns: repeat(2, 1fr); }
+
+  @media (max-width: 920px) {
+    .option-grid.two { grid-template-columns: 1fr; }
+  }
+
+  .option {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .option-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .option-label .name {
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .option-label .tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 100px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .option-body {
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  .option-note {
+    padding: 14px 18px 18px;
+    font-size: 13px;
+    color: var(--text-muted);
+    border-top: 1px dashed var(--border-soft);
+  }
+
+  .option-note b { color: var(--text); font-weight: 600; }
+
+  .tradeoff-row {
+    display: flex;
+    gap: 18px;
+    margin-top: 10px;
+    font-size: 12.5px;
+  }
+
+  .tradeoff-row div { flex: 1; }
+
+  .tradeoff-row .good::before { content: "+ "; color: var(--good); font-weight: 700; }
+  .tradeoff-row .bad::before { content: "– "; color: var(--critical); font-weight: 700; }
+
+  /* =========================================================
+     MINI CHROME — shared fake "app frame" used inside mockups
+     ========================================================= */
+
+  .frame {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    font-size: 12px;
+    min-width: 640px;
+  }
+
+  .frame-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .frame-titlebar .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--border);
+  }
+
+  .frame-titlebar .title {
+    margin-left: 4px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+  }
+
+  /* buttons used inside mockups */
+  .mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .mini-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mini-btn.ghost { background: transparent; }
+  .mini-btn:hover { background: var(--surface-hover); }
+  .mini-btn.primary:hover { background: #6a9dff; }
+
+  /* ---------- Current-state reference strip ---------- */
+
+  .current-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .current-strip .chip {
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #10131a;
+  }
+  .c1 { background: #6ee7a8; } .c2 { background: #f5b45a; } .c3 { background: #c084f0; }
+  .c4 { background: #6bb4f7; } .c5 { background: #7bd7db; } .c6 { background: #f28b8b; }
+
+  /* ============ TOOLBAR OPTION A: grouped bar ============ */
+
+  .toolbar-a { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .search-row input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-size: 11.5px;
+  }
+  .search-row select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+  }
+
+  .group-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .btn-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+  }
+  .btn-group .glabel {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 0 6px;
+  }
+
+  .menu-btn { position: relative; }
+  .menu-btn .mini-btn::after { content: "▾"; margin-left: 2px; font-size: 9px; opacity: 0.6; }
+
+  /* ============ TOOLBAR OPTION B: command bar ============ */
+
+  .toolbar-b { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .cmdbar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 10px;
+  }
+  .cmdbar input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 12px; outline: none; }
+  .cmdbar kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .quick-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ============ LIST rows shared ============ */
+
+  .order-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .order-row:hover { background: var(--surface-hover); }
+  .order-row.active { background: var(--accent-soft); border-color: var(--accent-dim); }
+  .order-row .who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .order-row .name { font-weight: 650; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .order-row .meta { font-size: 10px; color: var(--text-faint); }
+  .order-row .stage-pill {
+    font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 100px;
+    background: var(--surface-raised); color: var(--text-muted); white-space: nowrap;
+  }
+  .order-row .po { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .pin-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--warn); flex: none; }
+  .flag-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--critical); flex: none; }
+
+  /* ============ B1: resizable/collapsible ============ */
+
+  .b1-shell { display: flex; height: 300px; }
+  .b1-list { width: 220px; border-right: 1px solid var(--border); overflow-y: auto; padding: 8px; flex: none; position: relative; }
+  .b1-list.collapsed { width: 56px; }
+  .b1-list.collapsed .order-row .who, .b1-list.collapsed .order-row .stage-pill, .b1-list.collapsed .order-row .po { display: none; }
+  .b1-list.collapsed .order-row { justify-content: center; }
+  .b1-handle {
+    position: absolute; top: 50%; right: -9px; transform: translateY(-50%);
+    width: 18px; height: 34px; border-radius: 5px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--text-faint); cursor: pointer; z-index: 2;
+  }
+  .b1-handle:hover { background: var(--surface-hover); color: var(--text); }
+  .b1-detail { flex: 1; padding: 16px; overflow-y: auto; }
+  .avatar-dot { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex: none; }
+
+  /* ============ B2: slide-over drawer ============ */
+
+  .b2-shell { position: relative; height: 300px; overflow: hidden; }
+  .b2-list { padding: 8px; height: 100%; overflow-y: auto; }
+  .b2-drawer {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: 62%; background: var(--surface); border-left: 1px solid var(--border);
+    box-shadow: -18px 0 30px -14px rgba(0,0,0,0.55);
+    transform: translateX(0%); transition: transform .28s ease;
+    padding: 16px; overflow-y: auto;
+  }
+  .b2-drawer.closed { transform: translateX(100%); }
+  .b2-scrim {
+    position: absolute; inset: 0; background: rgba(4,6,10,0.35);
+    opacity: 1; transition: opacity .28s ease; pointer-events: none;
+  }
+  .b2-scrim.closed { opacity: 0; }
+  .drawer-close { position: absolute; top: 12px; right: 12px; }
+
+  /* ============ B3: tabbed detail ============ */
+
+  .b3-shell { display: flex; height: 300px; }
+  .b3-list { width: 200px; border-right: 1px solid var(--border); overflow-y: auto; padding: 8px; flex: none; }
+  .b3-detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tabs { display: flex; gap: 2px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 8px 12px; font-size: 11px; font-weight: 650; color: var(--text-faint);
+    border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab-panel { padding: 16px; overflow-y: auto; flex: 1; display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ============ B4: kanban ============ */
+
+  .b4-shell { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; height: 300px; }
+  .kanban-col { width: 168px; flex: none; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 7px; }
+  .kanban-head { padding: 9px 10px; border-bottom: 1px solid var(--border-soft); display: flex; justify-content: space-between; align-items: center; }
+  .kanban-head .cname { font-size: 10.5px; font-weight: 700; }
+  .kanban-head .count { font-size: 9.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .kanban-body { padding: 8px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; }
+  .kcard {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 9px; font-size: 10.5px; cursor: grab;
+  }
+  .kcard .kname { font-weight: 650; margin-bottom: 3px; }
+  .kcard .kmeta { color: var(--text-faint); font-size: 9.5px; display: flex; justify-content: space-between; }
+  .kcard.current { outline: 1.5px solid var(--accent); }
+
+  /* ---------- detail content bits reused across mockups ---------- */
+
+  .d-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .d-sub { font-size: 10.5px; color: var(--text-faint); margin-bottom: 12px; }
+  .d-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .d-card { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; padding: 8px 10px; }
+  .d-card .k { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 3px; }
+  .d-card .v { font-size: 11.5px; font-weight: 650; }
+  .d-section-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin: 14px 0 8px; }
+  .stage-track { display: flex; flex-direction: column; gap: 5px; }
+  .stage-line { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border-soft); font-size: 10.5px; }
+  .stage-line .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+  .stage-line.current { border-color: var(--accent-dim); background: var(--accent-soft); }
+  .stage-line.current .sdot { background: var(--warn); }
+  .stage-line.todo .sdot { background: var(--border); }
+  .stage-line.todo { color: var(--text-faint); }
+  .stage-line .slabel { flex: 1; }
+  .stage-line .sstat { font-size: 9px; color: var(--text-faint); }
+
+  /* ---------- closing ---------- */
+
+  .closing {
+    margin-top: 8px;
+    padding: 26px 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .closing h2 { font-size: 17px; margin: 0 0 14px; }
+  .rec-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .rec-list li { display: flex; gap: 12px; font-size: 13.5px; color: var(--text-muted); }
+  .rec-list .num {
+    flex: none; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .rec-list b { color: var(--text); }
+
+  footer.credits { margin-top: 40px; font-size: 11.5px; color: var(--text-faint); }
+</style>
+
+<div class="wrap">
+
+  <header class="intro">
+    <p class="eyebrow">Design notes · not implementation</p>
+    <h1>Layout concepts for Order Tracker</h1>
+    <p>Two problems, mocked up with the app's real vocabulary so they're easy to react to: the top action bar has grown to twelve same-weight buttons in four unlabeled colors, and the order list / order detail split is a fixed 90/10 divide that doesn't flex with what you're doing. Everything below is inert — click around, nothing calls the real app.</p>
+    <div class="note">🌙 <span><strong>Dark only, on purpose</strong> — mirrors the product's existing theme rather than proposing a new one.</span></div>
+  </header>
+
+  <!-- ============ COMBINED CONCEPT ============ -->
+  <section class="block">
+    <div class="block-head">
+      <h2>Combined — A + B3 + B1's collapse</h2>
+      <span class="idx">SELECTED DIRECTION</span>
+    </div>
+    <p class="block-intro">The three picked pieces, as one interface instead of three isolated demos: the grouped toolbar on top, a list pane that collapses when the detail side needs the room, and a tabbed detail pane instead of one long scroll. Try it end to end — collapse the list, switch tabs, select a different order.</p>
+
+    <div class="option" style="border-color: var(--accent-dim);">
+      <div class="option-label" style="background: var(--accent-soft);">
+        <span class="name" style="color: var(--accent);">Full combined mockup</span>
+        <span class="tag">click around</span>
+      </div>
+      <div class="option-body" style="padding: 0;">
+        <div class="frame" style="min-width: 100%; border: none; border-radius: 0;">
+          <div class="toolbar-a" style="border-bottom: 1px solid var(--border);">
+            <div class="search-row">
+              <input placeholder="Search name, project, quote/PO…" />
+              <select><option>Stage: All</option></select>
+              <span class="mini-btn ghost">☐ Completed</span>
+            </div>
+            <div class="group-row">
+              <span class="mini-btn primary">+ New Order</span>
+              <div class="btn-group">
+                <span class="glabel">Find</span>
+                <span class="mini-btn ghost">Customer Lookup</span>
+                <span class="mini-btn ghost">Refresh</span>
+              </div>
+              <div class="btn-group">
+                <span class="glabel">Import / Export</span>
+                <span class="mini-btn ghost menu-btn">Export</span>
+                <span class="mini-btn ghost">Bulk Import</span>
+              </div>
+              <div class="btn-group">
+                <span class="glabel">Backup</span>
+                <span class="mini-btn ghost menu-btn">Backup</span>
+              </div>
+              <div class="btn-group">
+                <span class="glabel">This order</span>
+                <span class="mini-btn ghost menu-btn">Documents</span>
+                <span class="mini-btn ghost">Reminders</span>
+              </div>
+            </div>
+          </div>
+          <div class="b1-shell" style="height: 420px;">
+            <div class="b1-list" id="cblist" style="width: 260px;">
+              <div class="b1-handle" id="cbhandle" title="Collapse">‹</div>
+              <div class="order-row active"><div class="avatar-dot">AR</div><div class="who"><span class="name">Alex Rivera</span><span class="meta">#412 · 61-44210</span></div><span class="pin-dot" title="Pinned"></span></div>
+              <div class="order-row"><div class="avatar-dot">JK</div><div class="who"><span class="name">Jordan Kim</span><span class="meta">#405 · 61-44198</span></div></div>
+              <div class="order-row"><div class="avatar-dot">ML</div><div class="who"><span class="name">Morgan Lee</span><span class="meta">#398 · 61-44175</span></div></div>
+              <div class="order-row"><div class="avatar-dot">CC</div><div class="who"><span class="name">Casey Chen</span><span class="meta">#390 · No PO</span></div><span class="flag-dot" title="Flagged"></span></div>
+              <div class="order-row"><div class="avatar-dot">PN</div><div class="who"><span class="name">Priya Nair</span><span class="meta">#420 · No PO</span></div></div>
+            </div>
+            <div class="b3-detail" style="flex:1;">
+              <div class="tabs">
+                <div class="tab" onclick="switchTab(this,'cb-ov')">Overview</div>
+                <div class="tab active" onclick="switchTab(this,'cb-sp')">Sales Process</div>
+                <div class="tab" onclick="switchTab(this,'cb-li')">Line Items <span style="opacity:.5">3</span></div>
+                <div class="tab" onclick="switchTab(this,'cb-fi')">Files <span style="opacity:.5">2</span></div>
+              </div>
+              <div class="tab-panel" id="cb-ov">
+                <div class="d-title">Alex Rivera — Order #412</div>
+                <div class="d-sub">Andersen · PO 61-44210 · Acct #402281</div>
+                <div class="d-cards">
+                  <div class="d-card"><div class="k">Stage</div><div class="v">Quote Created</div></div>
+                  <div class="d-card"><div class="k">Progress</div><div class="v">2 / 17</div></div>
+                  <div class="d-card"><div class="k">Updated</div><div class="v">Today</div></div>
+                </div>
+              </div>
+              <div class="tab-panel active" id="cb-sp">
+                <div class="d-section-title" style="margin-top:0">Sales Process</div>
+                <div class="stage-track">
+                  <div class="stage-line"><span class="sdot"></span><span class="slabel">Order Details</span><span class="sstat">Done</span></div>
+                  <div class="stage-line current"><span class="sdot"></span><span class="slabel">Quote Created</span><span class="sstat">Current · 2 of 17</span></div>
+                  <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Quote Signoff Received</span></div>
+                  <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Invoice Created</span></div>
+                  <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Cost Sheet Prepared</span></div>
+                </div>
+              </div>
+              <div class="tab-panel" id="cb-li">
+                <div class="d-section-title" style="margin-top:0">Line Items</div>
+                <div class="stage-track">
+                  <div class="stage-line"><span class="slabel">Window · Andersen 400 series · 36×80</span></div>
+                  <div class="stage-line"><span class="slabel">Window · Andersen 400 series · 30×60</span></div>
+                  <div class="stage-line"><span class="slabel">Door · Slab, prehung</span></div>
+                </div>
+              </div>
+              <div class="tab-panel" id="cb-fi">
+                <div class="d-section-title" style="margin-top:0">Files</div>
+                <div class="stage-track">
+                  <div class="stage-line"><span class="slabel">📄 quote_104715.pdf</span></div>
+                  <div class="stage-line"><span class="slabel">📄 signed_po_61-44210.pdf</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="option-note">
+        Collapse the list (‹ handle, left edge) when you want the Sales Process tab to breathe on a laptop screen; expand it back when you're triaging several orders in a row. The toolbar groups stay put regardless of list width, since they don't live inside either pane.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 1: TOOLBAR ============ -->
+  <section class="block">
+    <div class="block-head">
+      <h2>1 · The action bar</h2>
+      <span class="idx">CURRENT → OPTIONS</span>
+    </div>
+    <p class="block-intro">Right now every button gets a different saturated color, so color reads as "which button is this" instead of "how urgent is this." That's the actual fix — not necessarily hiding actions, just letting a neutral surface carry most of them and reserving color for the one or two that deserve it.</p>
+
+    <div class="option" style="margin-bottom: 22px;">
+      <div class="option-label"><span class="name">Current state</span><span class="tag" style="background:var(--critical-soft);color:var(--critical);">reference</span></div>
+      <div class="option-body">
+        <div class="current-strip">
+          <span class="chip c1">+ New Order</span><span class="chip c4">Customer Lookup</span><span class="chip c4">Refresh</span>
+          <span class="chip c2">Export CSV</span><span class="chip c2">Product Intake Sheet</span><span class="chip c5">Bulk Import</span>
+          <span class="chip c3">Backup All</span><span class="chip c3">Download Backup JSON</span><span class="chip c5">Restore Backup JSON</span>
+          <span class="chip c4">Open Quote</span><span class="chip c4">Open Invoice</span><span class="chip c4">Open Special Order</span>
+          <span class="chip c6">Reminders</span><span class="chip c6">Delete Order</span>
+        </div>
+      </div>
+      <div class="option-note">14 buttons, 6 colors, one visual weight. The colors already loosely group by column (green=create, blue=lookup/docs, orange=export, purple/teal=backup) but nothing <i>tells</i> you that — you have to already know it.</div>
+    </div>
+
+    <div class="option-grid two">
+      <div class="option">
+        <div class="option-label"><span class="name">A · Grouped bar</span><span class="tag">low effort</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="toolbar-a">
+              <div class="search-row">
+                <input placeholder="Search name, project, quote/PO…" />
+                <select><option>Stage: All</option></select>
+                <span class="mini-btn ghost">☐ Completed</span>
+              </div>
+              <div class="group-row">
+                <span class="mini-btn primary">+ New Order</span>
+                <div class="btn-group">
+                  <span class="glabel">Find</span>
+                  <span class="mini-btn ghost">Customer Lookup</span>
+                  <span class="mini-btn ghost">Refresh</span>
+                </div>
+                <div class="btn-group">
+                  <span class="glabel">Import / Export</span>
+                  <span class="mini-btn ghost menu-btn">Export</span>
+                  <span class="mini-btn ghost">Bulk Import</span>
+                </div>
+                <div class="btn-group">
+                  <span class="glabel">Backup</span>
+                  <span class="mini-btn ghost menu-btn">Backup</span>
+                </div>
+                <div class="btn-group">
+                  <span class="glabel">This order</span>
+                  <span class="mini-btn ghost menu-btn">Documents</span>
+                  <span class="mini-btn ghost">Reminders</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          Same actions, sorted into four labeled clusters with a hairline container instead of individual colors. "Export CSV" / "Product Intake Sheet" collapse into one <b>Export ▾</b> menu; the three backup actions collapse into one <b>Backup ▾</b> menu. Only <b>+ New Order</b> keeps a fill color, because it's the one action you take when nothing is selected yet.
+          <div class="tradeoff-row">
+            <div class="good">Ships in an afternoon — CSS/markup change, no new interaction pattern</div>
+            <div class="bad">Still a lot of controls above the fold; doesn't reduce total surface area much</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="option">
+        <div class="option-label"><span class="name">B · Command bar</span><span class="tag">bigger swing</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="toolbar-b">
+              <div class="cmdbar">
+                <span style="opacity:.5">⌘</span>
+                <input placeholder="Search orders, or type a command…" />
+                <kbd>⌘K</kbd>
+              </div>
+              <div class="quick-row">
+                <span class="mini-btn primary">+ New Order</span>
+                <span class="mini-btn ghost">Stage: All ▾</span>
+                <span class="mini-btn ghost">Backup ▾</span>
+                <span class="mini-btn ghost">Documents ▾</span>
+                <span class="mini-btn ghost">⋯ More</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          Search becomes the primary input (also matches for a PO number or account jumps straight to it, like Linear's <code>⌘K</code>). Only the handful of actions used <i>every session</i> stay as visible buttons; the rest — Product Intake Sheet, Restore Backup, per-document opens — move behind search-as-command or a "More" menu.
+          <div class="tradeoff-row">
+            <div class="good">Scales as more actions get added later without the bar growing again</div>
+            <div class="bad">Bigger behavior change — people have to learn the command bar exists</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 2: LIST / DETAIL ============ -->
+  <section class="block">
+    <div class="block-head">
+      <h2>2 · List + detail split</h2>
+      <span class="idx">4 PATTERNS</span>
+    </div>
+    <p class="block-intro">This is the real "master–detail" pattern — same shape as Gmail, Linear's issue list, or a Finder/Explorer window. The question isn't really the split itself, it's <i>how fixed</i> that split should be, and whether "detail" should mean one long scroll or something more structured. Four concrete variants, roughly cheapest → biggest change.</p>
+
+    <div class="option-grid two">
+
+      <!-- B1: resizable / collapsible -->
+      <div class="option">
+        <div class="option-label"><span class="name">B1 · Resizable, collapsible list</span><span class="tag">low effort</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="frame-titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">drag the handle, or click it to collapse</span></div>
+            <div class="b1-shell">
+              <div class="b1-list" id="b1list">
+                <div class="b1-handle" id="b1handle" title="Collapse">‹</div>
+                <div class="order-row active"><div class="avatar-dot">AR</div><div class="who"><span class="name">Alex Rivera</span><span class="meta">#412 · 61-44210</span></div></div>
+                <div class="order-row"><div class="avatar-dot">JK</div><div class="who"><span class="name">Jordan Kim</span><span class="meta">#405 · 61-44198</span></div></div>
+                <div class="order-row"><div class="avatar-dot">ML</div><div class="who"><span class="name">Morgan Lee</span><span class="meta">#398 · 61-44175</span></div></div>
+                <div class="order-row"><div class="avatar-dot">CC</div><div class="who"><span class="name">Casey Chen</span><span class="meta">#390 · No PO</span></div></div>
+              </div>
+              <div class="b1-detail">
+                <div class="d-title">Alex Rivera — Order #412</div>
+                <div class="d-sub">Andersen · PO 61-44210 · Acct #402281</div>
+                <div class="d-cards">
+                  <div class="d-card"><div class="k">Stage</div><div class="v">Quote Created</div></div>
+                  <div class="d-card"><div class="k">Progress</div><div class="v">2 / 17</div></div>
+                  <div class="d-card"><div class="k">Updated</div><div class="v">Today</div></div>
+                </div>
+                <div class="d-section-title">Sales Process</div>
+                <div class="stage-track">
+                  <div class="stage-line"><span class="sdot"></span><span class="slabel">Order Details</span><span class="sstat">Done</span></div>
+                  <div class="stage-line current"><span class="sdot"></span><span class="slabel">Quote Created</span><span class="sstat">Current</span></div>
+                  <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Quote Signoff Received</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          List pane drags narrower/wider, or collapses to an avatar rail (⇤ try the handle) when you need the whole screen for one order's stage timeline — exactly how Slack collapses its channel sidebar or Superhuman collapses its list.
+          <div class="tradeoff-row">
+            <div class="good">Incremental — same DOM structure, just make the split adjustable</div>
+            <div class="bad">Still only ever one order's detail visible at a time</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B2: slide-over drawer -->
+      <div class="option">
+        <div class="option-label"><span class="name">B2 · Slide-over drawer</span><span class="tag">medium effort</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="frame-titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">click a row to open the drawer</span></div>
+            <div class="b2-shell">
+              <div class="b2-list">
+                <div class="order-row" onclick="document.getElementById('b2drawer').classList.remove('closed');document.getElementById('b2scrim').classList.remove('closed')"><div class="avatar-dot">AR</div><div class="who"><span class="name">Alex Rivera</span><span class="meta">#412 · Andersen</span></div><span class="stage-pill">Quote Created</span></div>
+                <div class="order-row" onclick="document.getElementById('b2drawer').classList.remove('closed');document.getElementById('b2scrim').classList.remove('closed')"><div class="avatar-dot">JK</div><div class="who"><span class="name">Jordan Kim</span><span class="meta">#405 · Milgard</span></div><span class="stage-pill">PO Created</span></div>
+                <div class="order-row" onclick="document.getElementById('b2drawer').classList.remove('closed');document.getElementById('b2scrim').classList.remove('closed')"><div class="avatar-dot">ML</div><div class="who"><span class="name">Morgan Lee</span><span class="meta">#398 · Emtek</span></div><span class="stage-pill">Invoice Created</span></div>
+                <div class="order-row" onclick="document.getElementById('b2drawer').classList.remove('closed');document.getElementById('b2scrim').classList.remove('closed')"><div class="avatar-dot">CC</div><div class="who"><span class="name">Casey Chen</span><span class="meta">#390 · Orepac</span></div><span class="stage-pill">Quote Created</span></div>
+              </div>
+              <div class="b2-scrim closed" id="b2scrim"></div>
+              <div class="b2-drawer closed" id="b2drawer">
+                <span class="mini-btn ghost drawer-close" onclick="document.getElementById('b2drawer').classList.add('closed');document.getElementById('b2scrim').classList.add('closed')">✕ Close</span>
+                <div class="d-title">Alex Rivera — Order #412</div>
+                <div class="d-sub">Andersen · PO 61-44210</div>
+                <div class="d-cards">
+                  <div class="d-card"><div class="k">Stage</div><div class="v">Quote Created</div></div>
+                  <div class="d-card"><div class="k">Progress</div><div class="v">2 / 17</div></div>
+                </div>
+                <div class="d-section-title">Sales Process</div>
+                <div class="stage-track">
+                  <div class="stage-line"><span class="sdot"></span><span class="slabel">Order Details</span><span class="sstat">Done</span></div>
+                  <div class="stage-line current"><span class="sdot"></span><span class="slabel">Quote Created</span><span class="sstat">Current</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          List stays full-width and scannable (room for the stage pill + vendor, which today gets squeezed into a 300px column). Detail opens as an overlay — closing it never re-renders the list, and on a laptop-width screen you're not permanently giving up 400px to a pane you're not looking at.
+          <div class="tradeoff-row">
+            <div class="good">List can show more per row (vendor, stage, PO) since it's not fighting the detail pane for width</div>
+            <div class="bad">Can't glance at list + detail simultaneously — worse for "compare two orders" workflows</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B3: tabbed detail -->
+      <div class="option">
+        <div class="option-label"><span class="name">B3 · Tabbed detail pane</span><span class="tag">medium effort</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="frame-titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">split fixed, detail gets tabs instead of one long scroll</span></div>
+            <div class="b3-shell">
+              <div class="b3-list">
+                <div class="order-row active"><div class="who"><span class="name">Alex Rivera</span><span class="meta">#412</span></div></div>
+                <div class="order-row"><div class="who"><span class="name">Jordan Kim</span><span class="meta">#405</span></div></div>
+                <div class="order-row"><div class="who"><span class="name">Morgan Lee</span><span class="meta">#398</span></div></div>
+              </div>
+              <div class="b3-detail">
+                <div class="tabs">
+                  <div class="tab" onclick="b3show(this,'ov')">Overview</div>
+                  <div class="tab active" onclick="b3show(this,'sp')">Sales Process</div>
+                  <div class="tab" onclick="b3show(this,'li')">Line Items <span style="opacity:.5">3</span></div>
+                  <div class="tab" onclick="b3show(this,'fi')">Files <span style="opacity:.5">2</span></div>
+                </div>
+                <div class="tab-panel" id="b3-ov">
+                  <div class="d-title">Alex Rivera — Order #412</div>
+                  <div class="d-sub">Andersen · PO 61-44210 · Acct #402281</div>
+                  <div class="d-cards">
+                    <div class="d-card"><div class="k">Stage</div><div class="v">Quote Created</div></div>
+                    <div class="d-card"><div class="k">Progress</div><div class="v">2 / 17</div></div>
+                    <div class="d-card"><div class="k">Updated</div><div class="v">Today</div></div>
+                  </div>
+                </div>
+                <div class="tab-panel active" id="b3-sp">
+                  <div class="d-section-title" style="margin-top:0">Sales Process</div>
+                  <div class="stage-track">
+                    <div class="stage-line"><span class="sdot"></span><span class="slabel">Order Details</span><span class="sstat">Done</span></div>
+                    <div class="stage-line current"><span class="sdot"></span><span class="slabel">Quote Created</span><span class="sstat">Current · 2 of 17</span></div>
+                    <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Quote Signoff Received</span></div>
+                    <div class="stage-line todo"><span class="sdot"></span><span class="slabel">Invoice Created</span></div>
+                  </div>
+                </div>
+                <div class="tab-panel" id="b3-li">
+                  <div class="d-section-title" style="margin-top:0">Line Items</div>
+                  <div class="stage-track">
+                    <div class="stage-line"><span class="slabel">Window · Andersen 400 series · 36×80</span></div>
+                    <div class="stage-line"><span class="slabel">Window · Andersen 400 series · 30×60</span></div>
+                    <div class="stage-line"><span class="slabel">Door · Slab, prehung</span></div>
+                  </div>
+                </div>
+                <div class="tab-panel" id="b3-fi">
+                  <div class="d-section-title" style="margin-top:0">Files</div>
+                  <div class="stage-track">
+                    <div class="stage-line"><span class="slabel">📄 quote_104715.pdf</span></div>
+                    <div class="stage-line"><span class="slabel">📄 signed_po_61-44210.pdf</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          Try the tabs — this is the one that most directly answers "it's a long page" rather than "the split is wrong." Today, Order Items, Sales Process (17 stages), attachments, and notes all stack vertically on the right; tabbing them turns one long scroll into four short screens, and the badge counts (<code>Line Items 3</code>) tell you what's inside a tab before you open it.
+          <div class="tradeoff-row">
+            <div class="good">Directly fixes the scroll-fatigue problem on the detail pane, independent of list width</div>
+            <div class="bad">An extra click to get from Overview to Line Items where today it's just scrolling</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B4: kanban alt view -->
+      <div class="option">
+        <div class="option-label"><span class="name">B4 · Board view, as a second mode</span><span class="tag">biggest swing</span></div>
+        <div class="option-body">
+          <div class="frame">
+            <div class="frame-titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">[ List ] [ Board ●] — a view switcher, not a replacement</span></div>
+            <div style="padding:12px;">
+              <div class="b4-shell">
+                <div class="kanban-col">
+                  <div class="kanban-head"><span class="cname">Order Details</span><span class="count">3</span></div>
+                  <div class="kanban-body">
+                    <div class="kcard"><div class="kname">Priya Nair</div><div class="kmeta"><span>#420</span><span>No PO</span></div></div>
+                    <div class="kcard"><div class="kname">Sam Ortiz</div><div class="kmeta"><span>#419</span><span>No PO</span></div></div>
+                  </div>
+                </div>
+                <div class="kanban-col">
+                  <div class="kanban-head"><span class="cname">Quote Created</span><span class="count">4</span></div>
+                  <div class="kanban-body">
+                    <div class="kcard current"><div class="kname">Alex Rivera</div><div class="kmeta"><span>#412</span><span>61-44210</span></div></div>
+                    <div class="kcard"><div class="kname">Casey Chen</div><div class="kmeta"><span>#390</span><span>No PO</span></div></div>
+                  </div>
+                </div>
+                <div class="kanban-col">
+                  <div class="kanban-head"><span class="cname">Invoice Created</span><span class="count">2</span></div>
+                  <div class="kanban-body">
+                    <div class="kcard"><div class="kname">Morgan Lee</div><div class="kmeta"><span>#398</span><span>61-44175</span></div></div>
+                  </div>
+                </div>
+                <div class="kanban-col">
+                  <div class="kanban-head"><span class="cname">PO Created</span><span class="count">5</span></div>
+                  <div class="kanban-body">
+                    <div class="kcard"><div class="kname">Jordan Kim</div><div class="kmeta"><span>#405</span><span>61-44198</span></div></div>
+                    <div class="kcard"><div class="kname">Randy B.</div><div class="kmeta"><span>#378</span><span>45210</span></div></div>
+                  </div>
+                </div>
+                <div class="kanban-col">
+                  <div class="kanban-head"><span class="cname">Ship Ticket Received</span><span class="count">1</span></div>
+                  <div class="kanban-body">
+                    <div class="kcard"><div class="kname">Dirk Blyston</div><div class="kmeta"><span>#373</span><span>61-45193</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="option-note">
+          Not a replacement for the list — a second mode next to it, the way Asana or Linear let you flip between list and board. The order tracker's whole reason for existing is a 17-step pipeline; today the only way to see "what's stuck where" across every order is scanning stage-badge text down the left column. A board makes that the actual picture, and dragging a card between columns <i>is</i> the stage-change action.
+          <div class="tradeoff-row">
+            <div class="good">Only real way to see pipeline distribution across all orders at once, not just one at a time</div>
+            <div class="bad">17 stages is a lot of columns — needs column grouping/scrolling, and it's genuinely new surface to build, not a reshuffle</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="closing">
+    <h2>If I had to pick a first step</h2>
+    <ul class="rec-list">
+      <li><span class="num">1</span><span><b>A (grouped bar)</b> — nothing here requires a new interaction pattern, and it fixes the thing you actually flagged first: the toolbar "could look nicer."</span></li>
+      <li><span class="num">2</span><span><b>B3 (tabbed detail)</b> pairs naturally with it — same fixed-split shell you have today, just restructures what's inside the right pane. Lowest-risk fix for "the detail side feels like a lot."</span></li>
+      <li><span class="num">3</span><span>Treat <b>B2 (drawer)</b> and <b>B4 (board)</b> as later, bigger decisions — both are genuinely good patterns (they're how Linear and Asana do this), but they change how the app is <i>navigated</i>, not just how it looks, so they deserve their own conversation once 1–2 are live and you've felt where the current layout still pinches.</span></li>
+    </ul>
+  </div>
+
+  <footer class="credits">Static mockups — order names and data are illustrative, not real records. No production code was touched to make this page.</footer>
+
+</div>
+
+<script>
+  function wireCollapse(handleId, listId) {
+    var handle = document.getElementById(handleId);
+    var list = document.getElementById(listId);
+    if (!handle || !list) return;
+    handle.addEventListener('click', function () {
+      list.classList.toggle('collapsed');
+      handle.textContent = list.classList.contains('collapsed') ? '›' : '‹';
+    });
+  }
+  wireCollapse('b1handle', 'b1list');
+  wireCollapse('cbhandle', 'cblist');
+
+  function switchTab(el, panelId) {
+    el.parentElement.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+    el.classList.add('active');
+    var panel = el.closest('.b3-detail');
+    panel.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+    document.getElementById(panelId).classList.add('active');
+  }
+  // legacy alias for the standalone B3 option's inline handlers
+  function b3show(el, id) { switchTab(el, 'b3-' + id); }
+
+  document.querySelectorAll('.order-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var list = row.parentElement;
+      if (list.classList.contains('b1-list') || list.classList.contains('b3-list')) {
+        list.querySelectorAll('.order-row').forEach(function (r) { r.classList.remove('active'); });
+        row.classList.add('active');
+      }
+    });
+  });
+</script>

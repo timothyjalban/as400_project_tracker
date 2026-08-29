@@ -548,17 +548,20 @@ function addAs400GroupForItem(index) {
     return trimmed;
 }
 function createLineItemTemplate(type) {
-    // Apply any bulk-set defaults that are compatible with this item type.
+    // Install is a minimal, system-managed line (see handleNeedsInstallToggle) -
+    // it doesn't participate in door/window/hardware bulk-set defaults.
     const defaults = {};
-    for (const [field, value] of Object.entries(getBulkDefaultsForType(type))) {
-        const def = _getBulkFieldDef(field);
-        if (!isBulkFieldCompatibleWithType(def, type)) continue;
-        if (value !== '' && value !== null && value !== undefined) defaults[field] = value;
+    if (type !== 'install') {
+        for (const [field, value] of Object.entries(getBulkDefaultsForType(type))) {
+            const def = _getBulkFieldDef(field);
+            if (!isBulkFieldCompatibleWithType(def, type)) continue;
+            if (value !== '' && value !== null && value !== undefined) defaults[field] = value;
+        }
     }
 
     return {
         type,
-        product: type === 'hardware' ? 'Hardware' : (type === 'window' ? 'Window' : 'Door'),
+        product: type === 'install' ? 'Install' : (type === 'hardware' ? 'Hardware' : (type === 'window' ? 'Window' : 'Door')),
         door_count: '',
         entry_door: false,
         sidelites: '',
@@ -791,6 +794,68 @@ function dimensionsToCallout(widthRaw, heightRaw) {
     return `${widthFeet}${widthInches}${heightFeet}${heightInches}`;
 }
 
+// Standard single prehung door rough opening: nominal door size + 2" width,
+// + 2.25" height. Matches order_tracker.py's calculate_door_rough_opening()
+// and the "Standard single prehung" row in rough_openings.json.
+const DOOR_ROUGH_OPENING_WIDTH_OFFSET = 2;
+const DOOR_ROUGH_OPENING_HEIGHT_OFFSET = 2.25;
+
+function formatInchesWithFraction(value) {
+    if (!Number.isFinite(value)) return '';
+    const whole = Math.floor(value);
+    const fraction = Math.round((value - whole) * 4) / 4;
+    if (fraction === 0) return `${whole}"`;
+    if (fraction === 0.25) return `${whole}-1/4"`;
+    if (fraction === 0.5) return `${whole}-1/2"`;
+    if (fraction === 0.75) return `${whole}-3/4"`;
+    return `${value.toFixed(2)}"`;
+}
+
+function parseInchesValuePrecise(raw) {
+    if (raw === null || raw === undefined) return null;
+    const text = String(raw).trim();
+    if (!text) return null;
+
+    // Fraction-aware: handles "38", "38\"", "82-1/4\"", "82 1/4" etc. without
+    // collapsing the fraction the way parseInchesValue's whole-number rounding does.
+    const fractionMatch = text.match(/(\d+(?:\.\d+)?)[\s-]+(\d+)\s*\/\s*(\d+)/);
+    if (fractionMatch) {
+        const whole = Number.parseFloat(fractionMatch[1]);
+        const numerator = Number.parseFloat(fractionMatch[2]);
+        const denominator = Number.parseFloat(fractionMatch[3]);
+        if (Number.isFinite(whole) && Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+            return whole + (numerator / denominator);
+        }
+    }
+
+    const match = text.match(/\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const numeric = Number.parseFloat(match[0]);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+function calculateDoorRoughOpeningDimensions(nominalWidthRaw, nominalHeightRaw) {
+    const width = parseInchesValuePrecise(nominalWidthRaw);
+    const height = parseInchesValuePrecise(nominalHeightRaw);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+
+    return {
+        width: formatInchesWithFraction(width + DOOR_ROUGH_OPENING_WIDTH_OFFSET),
+        height: formatInchesWithFraction(height + DOOR_ROUGH_OPENING_HEIGHT_OFFSET),
+    };
+}
+
+function reverseDoorRoughOpeningDimensions(roWidthRaw, roHeightRaw) {
+    const width = parseInchesValuePrecise(roWidthRaw);
+    const height = parseInchesValuePrecise(roHeightRaw);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+
+    return {
+        width: String(width - DOOR_ROUGH_OPENING_WIDTH_OFFSET),
+        height: String(height - DOOR_ROUGH_OPENING_HEIGHT_OFFSET),
+    };
+}
+
 function normalizeDoorSwingFromImport(item) {
     const existing = String(item?.swing || '').trim();
     if (existing) return existing;
@@ -843,6 +908,21 @@ function syncWindowLegacyColor(item) {
     }
 }
 function normalizeLineItem(rawItem) {
+    // Install is a minimal, system-managed line (see handleNeedsInstallToggle)
+    // with none of the door/window/hardware fields below - keep it isolated
+    // from that normalization entirely rather than let it fall through to
+    // the door default.
+    const rawTypeTextForInstallCheck = String(rawItem?.type || rawItem?.product || '').toLowerCase();
+    if (rawTypeTextForInstallCheck.includes('install')) {
+        return {
+            ...createLineItemTemplate('install'),
+            ...(rawItem || {}),
+            type: 'install',
+            product: 'Install',
+            quantity: rawItem?.quantity || 1,
+        };
+    }
+
     const item = { ...createLineItemTemplate('door'), ...(rawItem || {}) };
     const rawTypeText = String(item.type || item.product || '').toLowerCase();
     const detectedType = rawTypeText.includes('hardware') ? 'hardware' : (rawTypeText.includes('window') ? 'window' : 'door');
@@ -1167,9 +1247,38 @@ function syncDerivedPrefitFromLineItems() {
     }
 }
 
+const INSTALL_LINE_ITEM_SKU = '661808';
+
+function handleNeedsInstallToggle(checked) {
+    // Explicit '0' (not '') - collectInlineOrderFormData() treats a blank
+    // hidden field as "unchanged, keep the existing saved value", which
+    // would silently re-check the box on save if we used ''.
+    const hidden = document.getElementById('inline_needs_install');
+    if (hidden) hidden.value = checked ? '1' : '0';
+
+    const hasInstallItem = currentLineItems.some(item => item.type === 'install');
+
+    if (checked && !hasInstallItem) {
+        const installItem = createLineItemTemplate('install');
+        installItem.vendor_sku = INSTALL_LINE_ITEM_SKU;
+        installItem.quantity = 1;
+        syncLineItemAs400Group(installItem);
+        currentLineItems.push(installItem);
+        renderLineItemsEditor();
+        syncLineItemsToHiddenField();
+    } else if (!checked && hasInstallItem) {
+        currentLineItems = currentLineItems.filter(item => item.type !== 'install');
+        renderLineItemsEditor();
+        syncLineItemsToHiddenField();
+    }
+}
+
 function addLineItem(type) {
     const newItem = createLineItemTemplate(type);
     syncLineItemAs400Group(newItem);
+    if (typeof applyBulkGroupDefaultsToItem === 'function') {
+        applyBulkGroupDefaultsToItem(newItem);
+    }
     currentLineItems.push(newItem);
     const newIndex = currentLineItems.length - 1;
     renderLineItemsEditor();
@@ -1356,6 +1465,9 @@ function updateLineItem(index, field, value, options = {}) {
     if (field === 'as400_group') {
         currentLineItems[index].as400_group_custom = true;
         currentLineItems[index].as400_group_auto = false;
+        if (typeof applyBulkGroupDefaultsToItem === 'function') {
+            applyBulkGroupDefaultsToItem(currentLineItems[index]);
+        }
     }
     if (field === 'series' && currentLineItems[index].type === 'door') {
         currentLineItems[index].model = normalizedValue;
@@ -1409,6 +1521,9 @@ function updateLineItem(index, field, value, options = {}) {
         currentLineItems[index].vendor_sku = getVendorSkuForName(normalizedValue) || '';
         if (!currentLineItems[index].as400_group_custom) {
             syncLineItemAs400Group(currentLineItems[index], { force: true });
+            if (typeof applyBulkGroupDefaultsToItem === 'function') {
+                applyBulkGroupDefaultsToItem(currentLineItems[index]);
+            }
         }
         if (shouldRender) renderLineItemsEditor();
         if (shouldRender && options.focusAfterRender) {
@@ -1424,27 +1539,62 @@ function updateLineItem(index, field, value, options = {}) {
         enforceSinglePrefitDoor();
         if (!currentLineItems[index].as400_group_custom) {
             syncLineItemAs400Group(currentLineItems[index], { force: true });
+            if (typeof applyBulkGroupDefaultsToItem === 'function') {
+                applyBulkGroupDefaultsToItem(currentLineItems[index]);
+            }
         }
     }
 
     if ((field === 'style' || field === 'door_style' || field === 'door_type') && !currentLineItems[index].as400_group_custom) {
         syncLineItemAs400Group(currentLineItems[index], { force: true });
+        if (typeof applyBulkGroupDefaultsToItem === 'function') {
+            applyBulkGroupDefaultsToItem(currentLineItems[index]);
+        }
     }
 
     if (field === 'size_mode') {
+        const isDoorItem = currentLineItems[index].type === 'door';
         if (normalizedValue === 'callout') {
-            const inferredCallout = dimensionsToCallout(currentLineItems[index].width, currentLineItems[index].height);
-            if (inferredCallout && !String(currentLineItems[index].callout_size || '').trim()) {
-                currentLineItems[index].callout_size = inferredCallout;
-                currentLineItems[index].size = inferredCallout;
+            if (!String(currentLineItems[index].callout_size || '').trim()) {
+                let widthForCallout = currentLineItems[index].width;
+                let heightForCallout = currentLineItems[index].height;
+                if (isDoorItem) {
+                    const nominal = reverseDoorRoughOpeningDimensions(widthForCallout, heightForCallout);
+                    if (nominal) {
+                        widthForCallout = nominal.width;
+                        heightForCallout = nominal.height;
+                    }
+                }
+                const inferredCallout = dimensionsToCallout(widthForCallout, heightForCallout);
+                if (inferredCallout) {
+                    currentLineItems[index].callout_size = inferredCallout;
+                    currentLineItems[index].size = inferredCallout;
+                }
             }
         } else if (normalizedValue === 'rough_opening') {
-            const hasWidthOrHeight = String(currentLineItems[index].width || '').trim() || String(currentLineItems[index].height || '').trim();
-            if (!hasWidthOrHeight) {
-                const derived = calloutToDimensions(currentLineItems[index].callout_size);
-                if (derived) {
-                    currentLineItems[index].width = derived.width;
-                    currentLineItems[index].height = derived.height;
+            const calloutCode = String(currentLineItems[index].callout_size || '').trim();
+            if (calloutCode) {
+                const nominal = calloutToDimensions(calloutCode);
+                if (nominal) {
+                    if (isDoorItem) {
+                        const ro = calculateDoorRoughOpeningDimensions(nominal.width, nominal.height);
+                        if (ro) {
+                            currentLineItems[index].width = ro.width;
+                            currentLineItems[index].height = ro.height;
+                        }
+                    } else {
+                        currentLineItems[index].width = nominal.width;
+                        currentLineItems[index].height = nominal.height;
+                    }
+                }
+            } else {
+                const hasWidthOrHeight = String(currentLineItems[index].width || '').trim() || String(currentLineItems[index].height || '').trim();
+                if (!hasWidthOrHeight) {
+                    const derived = calloutToDimensions(currentLineItems[index].callout_size);
+                    if (derived) {
+                        currentLineItems[index].width = derived.width;
+                        currentLineItems[index].height = derived.height;
+                    }
                 }
             }
             currentLineItems[index].size = [currentLineItems[index].width, currentLineItems[index].height]
@@ -1678,6 +1828,49 @@ function syncDoorSwingSelectElements() {
         }
     });
 }
+function renderInstallLineItemCard(item, index) {
+    const groupName = getAs400GroupNameForItem(item);
+    const previousGroupName = index > 0 ? getAs400GroupNameForItem(currentLineItems[index - 1]) : '';
+    const groupHeader = index === 0 || groupName !== previousGroupName
+        ? renderAs400GroupHeader(groupName)
+        : '';
+    const groupColor = getAs400GroupColor(groupName);
+
+    return `
+        ${groupHeader}
+        <div class="line-item-card as400-group-card as400-group-${groupColor} line-item-card-install" data-line-item-card="${index}" data-as400-group-card="${escapeHtml(groupName)}">
+            <div class="line-item-header">
+                <div class="line-item-header-main">
+                    <span class="line-item-number">#${index + 1}</span>
+                    <span class="line-item-install-badge">Install</span>
+                    <div class="line-item-field line-item-room-inline">
+                        <input type="text" value="${escapeHtml(item.room || '')}" data-item-index="${index}" data-item-field="room" placeholder="Room / Location" aria-label="Room / Location">
+                    </div>
+                </div>
+                <div class="line-item-header-actions">
+                    <button type="button" class="item-move-button" data-item-move-up="${index}" ${index === 0 ? 'disabled' : ''} title="Move item up">Up</button>
+                    <button type="button" class="item-move-button" data-item-move-down="${index}" ${index === currentLineItems.length - 1 ? 'disabled' : ''} title="Move item down">Down</button>
+                    <button type="button" class="item-remove-button" data-item-remove="${index}">Remove</button>
+                </div>
+            </div>
+            <div class="line-item-grid line-item-grid-quick">
+                <div class="line-item-field">
+                    <label>Quantity</label>
+                    <input type="number" min="1" value="${item.quantity}" data-item-index="${index}" data-item-field="quantity">
+                </div>
+                <div class="line-item-field">
+                    <label>Unit Price</label>
+                    <input type="number" min="0" step="0.01" value="${escapeHtml(item.price != null && item.price !== '' ? item.price : '')}" data-item-index="${index}" data-item-field="price" placeholder="e.g. 499.99">
+                </div>
+                <div class="line-item-field">
+                    <label>AS400 Description</label>
+                    <div class="item-vendor-sku">SKU ${escapeHtml(item.vendor_sku || '')} &mdash; DeCamp Install</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderLineItemsEditor() {
     if (!lineItemsList) return;
 
@@ -1701,6 +1894,10 @@ function renderLineItemsEditor() {
     sortLineItemsByAs400Group();
 
     lineItemsList.innerHTML = currentLineItems.map((item, index) => {
+        if (item.type === 'install') {
+            return renderInstallLineItemCard(item, index);
+        }
+
         const isDoor = item.type === 'door';
         const isWindow = item.type === 'window';
         const isHardware = item.type === 'hardware';
@@ -1950,7 +2147,13 @@ function renderLineItemsEditor() {
                         <label>Jamb Size</label>
                         <select data-item-index="${index}" data-item-field="jamb_size">
                             ${renderSelectOptions(
-                                [...getJambSizeOptions(), '➕ Add New Jamb Size'],
+                                [
+                                    ...(item.jamb_size && !getJambSizeOptions().some(option => option.toLowerCase() === String(item.jamb_size).toLowerCase())
+                                        ? [item.jamb_size]
+                                        : []),
+                                    ...getJambSizeOptions(),
+                                    '➕ Add New Jamb Size',
+                                ],
                                 item.jamb_size,
                                 'Select jamb size'
                             )}
@@ -2003,6 +2206,25 @@ function renderLineItemsEditor() {
                         </select>
                     </div>
                     <div class="line-item-field">
+                        <label>Texture</label>
+                        <select data-item-index="${index}" data-item-field="door_texture">
+                            ${renderSelectOptions(
+                                [
+                                    'Smooth-Star',
+                                    'Classic Craft Fir Grain',
+                                    'Classic Craft Mahogany Grain',
+                                    'Classic Craft Canvas',
+                                    'Fiber-Classic Oak Collection',
+                                    'Fiber-Classic Mahogany Collection',
+                                    'Traditions',
+                                    'Profiles',
+                                ],
+                                item.door_texture,
+                                'Select texture'
+                            )}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
                         <label>Core</label>
                         <select data-item-index="${index}" data-item-field="core">
                             ${renderSelectOptions(['Hollow Core', 'Solid Core'], item.core, 'Select core')}
@@ -2011,14 +2233,88 @@ function renderLineItemsEditor() {
                     <div class="line-item-field">
                         <label>Sticking</label>
                         <select data-item-index="${index}" data-item-field="sticking">
-                            ${renderSelectOptions(['Ovolo', 'Shaker'], item.sticking, 'Select sticking')}
+                            ${renderSelectOptions(['Square', 'Ovolo', 'Shaker'], item.sticking, 'Select sticking')}
                         </select>
                     </div>
                     <div class="line-item-field">
-                        <label>Lites (Glass)</label>
-                        <select data-item-index="${index}" data-item-field="glass">
-                            ${renderSelectOptions(['None', '1 LT', '2 LT', '3 LT', '4 LT', '6 LT', '9 LT'], item.glass, 'Select lites')}
+                        <label>Glass Tint</label>
+                        <select data-item-index="${index}" data-item-field="glass_tint">
+                            ${renderSelectOptions(['Clear', 'Obscure', 'Low-E', 'Tempered'], item.glass_tint, 'Select tint')}
                         </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Lite Shape</label>
+                        <input type="text" value="${escapeHtml(item.door_glass_shape || '')}" data-item-index="${index}" data-item-field="door_glass_shape" placeholder="e.g. Full Lite Rectangle, Craftsman Rectangle">
+                    </div>
+                    <div class="line-item-field">
+                        <label>Lite Style</label>
+                        <input type="text" value="${escapeHtml(item.door_glass_lite_style || '')}" data-item-index="${index}" data-item-field="door_glass_lite_style" placeholder="e.g. 10 Lite, 6 Lite Colonial">
+                    </div>
+                    <div class="line-item-field">
+                        <label>Lite Frame</label>
+                        <select data-item-index="${index}" data-item-field="door_frame_profile">
+                            ${renderSelectOptions(['Flat Lite Frame', 'Scrolled Lite Frame'], item.door_frame_profile, 'Select lite frame')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Finish Type</label>
+                        <select data-item-index="${index}" data-item-field="finish_type">
+                            ${renderSelectOptions(['Primed', 'Unfinished', 'Prefinished'], item.finish_type, 'Select finish type')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Wood Species / Stain Color</label>
+                        <input type="text" value="${escapeHtml(item.finish_detail || '')}" data-item-index="${index}" data-item-field="finish_detail" placeholder="e.g. Red Oak, or a stain color name">
+                    </div>
+                    <div class="line-item-field">
+                        <label>Panel Style</label>
+                        <select data-item-index="${index}" data-item-field="panel_style">
+                            ${renderSelectOptions(['1 Panel', '2 Panel', '3 Panel', '4 Panel', '5 Panel', '6 Panel', '1 Lite', '2 Lite', '3 Lite', '5 Lite', '10 Lite', '15 Lite', 'Louver', 'Plank'], item.panel_style, 'Select panel style')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Boring</label>
+                        <select data-item-index="${index}" data-item-field="boring">
+                            ${renderSelectOptions(['Single', 'Double', 'None'], item.boring, 'Select boring')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Hinge Size</label>
+                        <select data-item-index="${index}" data-item-field="hinge_size">
+                            ${renderSelectOptions(['3"', '3-1/2"', '4"', '4-1/2"'], item.hinge_size, 'Select hinge size')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Hinge Finish</label>
+                        <select data-item-index="${index}" data-item-field="hinge_finish">
+                            ${renderSelectOptions(
+                                ['Satin Nickel', 'Oil-Rubbed Bronze', 'Bright Brass', 'Polished Chrome', 'Brushed Chrome', 'Black'],
+                                item.hinge_finish,
+                                'Select hinge finish'
+                            )}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Exterior Trim</label>
+                        <select data-item-index="${index}" data-item-field="exterior_trim">
+                            ${renderSelectOptions(['Brickmould', 'No Exterior Trim'], item.exterior_trim, 'Select trim')}
+                        </select>
+                    </div>
+                    <div class="line-item-field">
+                        <label>Sill</label>
+                        <input type="text" value="${escapeHtml(item.sill || '')}" data-item-index="${index}" data-item-field="sill" placeholder="e.g. Bronze, Mill Aluminum">
+                    </div>
+                    <div class="line-item-field">
+                        <label>Hardware</label>
+                        <select data-item-index="${index}" data-item-field="hardware_option">
+                            ${renderSelectOptions(['Standard', 'Lever', 'Knob', 'Deadbolt'], item.hardware_option, 'Select hardware')}
+                        </select>
+                    </div>
+                    <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
+                        <label class="checkbox-label">
+                            <input type="checkbox" ${item.qlon ? 'checked' : ''} data-item-index="${index}" data-item-field="qlon">
+                            <span>Q-lon Weatherstripping</span>
+                        </label>
                     </div>
                     ${item.prefit_enabled ? `
                     <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input line-item-field-prefit-inline line-item-use-customer-door">

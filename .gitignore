@@ -18,6 +18,9 @@ env/
 .env
 .env.*
 
+# Local secrets loaded by the start_*.bat scripts (never commit real values)
+secrets.local.bat
+
 # Flask/runtime
 instance/
 *.log
@@ -38,3 +41,13 @@ Thumbs.db
 
 # Frontend tooling (if added later)
 node_modules/
+
+# Or-Pac scraper debug artifacts (screenshots/HTML may contain session data)
+scripts/_orepac_debug/
+
+# Flutter/Dart (customer_app/flutter_files)
+customer_app/flutter_files/build/
+customer_app/flutter_files/.dart_tool/
+customer_app/flutter_files/.idea/
+customer_app/flutter_files/.flutter-plugins-dependencies
+customer_app/flutter_files/**/*.iml
