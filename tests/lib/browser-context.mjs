@@ -20,6 +20,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const FILES = [
   'static/js/app.js',
   'static/js/line-item-fields.js',
+  'static/js/line-item-options.js',
   'static/js/line-items.js',
   'static/js/line-item-render.js',
   'static/js/line-item-catalog.js',
