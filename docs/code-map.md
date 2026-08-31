@@ -10,9 +10,9 @@ BROWSER (static/js/*.js)  ─▶  FLASK (app.py + blueprints/)  ─▶  SQLite (
                                         │  "Create Quote / Invoice" button
                                         ▼
                     desktop_helper_service.py  (port 5001)
-                                        │  imports by path
+                                        │  imports automation/launch_ibm.py
                                         ▼
-        C:\Projects\Order-Tracker\scripts\launch_ibm.py   ← types into the AS400 green screen
+        automation/launch_ibm.py   ← types into the AS400 green screen
 ```
 
 Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
@@ -40,8 +40,8 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 | Change **what the preview shows** | `static/js/line-item-as400.js` | `buildStandardAs400CommentPreview` (comment block), `buildCtrlAltSDescription` (the 36-char description) |
 | Change the **structured plan** sent to the desktop helper | `static/js/as400-format.js` | `buildAs400RowPlan()` — the single source of truth; preview + payload both use it |
 | Change **which fields feed the AS400 text** | `static/js/line-item-fields.js` | the entry's `as400: { target, order, format }` |
-| Change **what actually gets typed** | `C:\Projects\Order-Tracker\scripts\launch_ibm.py` | *separate repo.* `_build_macro_description` etc.; `run_vendor_sku_macro_dialog` types it. The `AS400_USE_ROW_PLAN` env flag makes it type the row plan verbatim instead. |
-| Change the **bridge** between web app and the typist | `desktop_helper_service.py` | the `/api/launch-*` endpoints |
+| Change **what actually gets typed** | `automation/launch_ibm.py` | `_build_macro_description` etc.; `run_vendor_sku_macro_dialog` types it. The `AS400_USE_ROW_PLAN` env flag makes it type the row plan verbatim instead. (Vendored from the old `C:\Projects\Order-Tracker` project — the `.ahk` macros are in `automation/as400_macros/`.) |
+| Change the **bridge** between web app and the typist | `desktop_helper_service.py` | the `/api/launch-*` endpoints; imports `launch_ibm` from `automation/` |
 
 ## Orders (not line items)
 

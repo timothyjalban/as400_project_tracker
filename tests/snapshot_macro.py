@@ -24,17 +24,17 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "orders"
 SNAPSHOTS = ROOT / "tests" / "snapshots"
 
-# Same path desktop_helper_service.py adds.
-DESKTOP_APP_PATH = Path(os.environ.get("DESKTOP_APP_PATH", r"C:\Projects\Order-Tracker"))
-sys.path.insert(0, str(DESKTOP_APP_PATH))
+# Same import path desktop_helper_service.py uses: automation/ for launch_ibm,
+# repo root so its `from data.vendors import COMMON_VENDORS` resolves.
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "automation"))
 
 
 def load_launch_ibm():
     try:
-        from scripts import launch_ibm  # type: ignore
+        import launch_ibm  # type: ignore
     except Exception as exc:  # pragma: no cover - environment specific
-        print(f"Could not import scripts.launch_ibm from {DESKTOP_APP_PATH}:\n  {exc}", file=sys.stderr)
-        print("Set DESKTOP_APP_PATH if the automation project lives elsewhere.", file=sys.stderr)
+        print(f"Could not import automation/launch_ibm.py:\n  {exc}", file=sys.stderr)
         raise SystemExit(2)
     return launch_ibm
 

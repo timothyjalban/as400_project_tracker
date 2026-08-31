@@ -27,16 +27,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Add the desktop app's directory to Python path to import its modules
-DESKTOP_APP_PATH = Path(r"C:\Projects\Order-Tracker")
-sys.path.insert(0, str(DESKTOP_APP_PATH))
+# AS400 automation lives in automation/ in this repo (vendored from the old
+# desktop project). Put it on the path so its intra-package imports resolve.
+_REPO_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_REPO_DIR))                 # so `from data.vendors` resolves
+sys.path.insert(0, str(_REPO_DIR / "automation"))  # so `import launch_ibm` resolves
 
 try:
-    from scripts.launch_ibm import launch_ibm_with_details
-    logger.info("Successfully imported launch_ibm_with_details from desktop app")
+    from launch_ibm import launch_ibm_with_details
+    logger.info("Imported launch_ibm_with_details from automation/")
 except ImportError as e:
-    logger.error("Failed to import launch_ibm module: %s", e)
-    logger.error("Make sure desktop app is at: %s", DESKTOP_APP_PATH)
+    logger.error("Failed to import automation/launch_ibm.py: %s", e)
     sys.exit(1)
 
 try:
@@ -45,7 +46,7 @@ except Exception:
     COMMON_VENDORS = []
 
 TRACE_ENV_VAR = 'OT_AUTOMATION_TRACE'
-WEB_DB_PATH = Path(os.environ.get('ORDER_TRACKER_DB_PATH', r'C:\Projects\Order-Tracker\orders.db'))
+WEB_DB_PATH = Path(os.environ.get('ORDER_TRACKER_DB_PATH', str(_REPO_DIR / 'orders.db')))
 
 INVALID_VENDOR_SKUS = {"1001", "1002", "1003", "2001", "2002", "2003"}
 
