@@ -1,0 +1,15 @@
+# syn-05-bypass-triple
+# 1 rows
+
+--- row 1 ---
+sku:          663615
+description:  RO 9068 1-3/8 20 PRM SHK BYPASS  [31 ch]
+um:           EA
+price:        517.36
+qty:          3
+fresh comment: true
+  | ROOM: MBR
+  | 4-9/16 PRM FJ INT Bypass Jambs
+  | Bore only for finger pulls
+  | w/cox tracks & BB rollers
+  | STD floor guides

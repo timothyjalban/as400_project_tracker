@@ -1,0 +1,3 @@
+# Snapshot files are byte-compared by the harness; keep them LF everywhere so a
+# clone on Windows doesn't show false drift against LF-generated output.
+tests/** text eol=lf

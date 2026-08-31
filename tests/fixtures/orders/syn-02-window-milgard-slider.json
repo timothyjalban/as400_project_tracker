@@ -1,0 +1,31 @@
+{
+  "id": "syn-02",
+  "customer_name": "Sample Two",
+  "vendor_sku": "",
+  "needs_prefit": false,
+  "prefit_meta": null,
+  "line_items": [
+    {
+      "type": "window",
+      "quantity": 1,
+      "size_mode": "rough_opening",
+      "vendor": "Milgard",
+      "vendor_sku": "",
+      "room": "LR",
+      "style": "",
+      "series": "V400",
+      "operation": "Slider",
+      "fin_type": "1 3/8\" Setback",
+      "glass": "Low-E",
+      "argon": "Argon",
+      "tempered_glass": false,
+      "exterior_color": "White",
+      "interior_color": "White",
+      "callout_size": "",
+      "width": "48",
+      "height": "36",
+      "notes": "",
+      "price": "578.77"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# syn-03-hardware-emtek
+# 1 rows
+
+--- row 1 ---
+sku:          (blank)
+description:  EMTEK-5040 Modern Rectangular US15 L  [36 ch]
+um:           EA
+price:        284.00
+qty:          1
+fresh comment: true
+  | ROOM: Entry
+  | 2 3/8" | Keyed

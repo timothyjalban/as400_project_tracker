@@ -1,0 +1,16 @@
+# syn-09-bom-door
+# 1 rows
+
+--- row 1 ---
+sku:          (blank)
+description:  RO 3068 1-3/4 SC 20 PRM SHAKER PH  [33 ch]
+um:           EA
+price:        720.00
+qty:          1
+fresh comment: true
+  | ROOM: Entry
+  | Orepac | 20 | Shaker Prehung |
+  | Primed
+  | SLABS: 2 slabs
+  | SWING: LHIS | JAMB: 4 9/16
+  | MODS: Custom mortise

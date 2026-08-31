@@ -1,0 +1,26 @@
+# syn-08-nocost-and-mixed
+# 2 rows
+
+--- row 1 ---
+sku:          (blank)
+description:  RO 2668 1-3/8 HC 20 PRM SHAKER PH  [33 ch]
+um:           EA
+price:        288.00
+qty:          1
+fresh comment: true
+  | ROOM: Hall
+  | Orepac | 20 | Shaker Prehung |
+  | Primed
+  | SWING: LHIS | JAMB: 4 9/16
+
+--- row 2 ---
+sku:          (blank)
+description:  RO 2668 20 PRM JAMB KIT  [23 ch]
+um:           NC
+price:        0.00
+qty:          1
+fresh comment: true
+  | ROOM: Hall
+  | Orepac | 20 | Jamb Kit |
+  | Primed
+  | No charge - replacement jamb

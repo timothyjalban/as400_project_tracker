@@ -1,0 +1,15 @@
+{
+  "name": "html-order-tracker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Order Tracker web app - tooling only (no runtime deps).",
+  "type": "module",
+  "scripts": {
+    "snapshots": "node tests/run_snapshots.mjs",
+    "snapshots:update": "node tests/run_snapshots.mjs --update",
+    "snapshots:preview": "node tests/snapshot_preview.mjs",
+    "snapshots:macro": "python tests/snapshot_macro.py",
+    "registry": "node tests/line_item_fields.mjs",
+    "fixtures": "python tests/export_fixtures.py"
+  }
+}

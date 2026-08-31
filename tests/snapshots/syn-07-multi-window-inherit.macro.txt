@@ -1,0 +1,39 @@
+# syn-07-multi-window-inherit
+# order syn-07  needs_prefit=False  items=3
+resolved_vendor_sku: 660509
+
+=== item 1  (window) ===
+sku:         660509
+description: 46 x 24 XO V400
+um:          EA
+price:       468.80
+qty:         1
+  [row-plan] sku=660509 | desc=RO 46 x 24 XO V400 | um=EA | price=468.80 | qty=1
+comment:
+             ROOM: Bedroom
+             Milgard | 1 3/8" SB | EXT/INT:
+             Tan | GLASS: Low-E | Argon |
+             HANDING: Slider
+
+=== item 2  (window) ===
+sku:         660509
+description: 46 x 24 XO V400
+um:          EA
+price:       468.80
+qty:         1
+  [row-plan] sku=660509 | desc=RO 46 x 24 XO V400 | um=EA | price=468.80 | qty=1
+comment: (inherits previous block)
+
+=== item 3  (window) ===
+sku:         660509
+description: 24 x 36 SH V400
+um:          EA
+price:       392.10
+qty:         1
+  [row-plan] sku=660509 | desc=RO 24 x 36 SH V400 | um=EA | price=392.10 | qty=1
+comment:
+             ROOM: Bath
+             Milgard | 1 3/8" SB | EXT/INT:
+             Tan | GLASS: Low-E | Argon |
+             TEMPERED | HANDING: Single
+             Hung
