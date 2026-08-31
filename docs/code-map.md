@@ -66,18 +66,19 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 Any diff = you changed AS400 output. Intended? `npm run snapshots:update`.
 See `tests/README.md`.
 
-## File sizes (rough, biggest first)
+## The line-item files (was one 2,864-line `line-items.js`)
 
 | File | Lines | What |
 |---|---|---|
-| `line-items.js` | ~1,260 | item state, normalization, geometry, `updateLineItem`, add/remove/move |
-| `app.js` | ~1,300 | shared globals, DOM refs, toolbar, tabs, page wiring |
-| `stage-details-rendering.js` | ~1,090 | sales-process pane |
-| `line-item-as400.js` | ~900 | AS400 preview builders |
-| `document-generation.js` | ~940 | Create Quote/Invoice/SO |
+| `line-items.js` | ~1,000 | item state, `normalizeLineItem`, `updateLineItem`, add/remove/move/copy, prefit derivation |
+| `line-item-as400.js` | ~900 | AS400 preview string builders |
 | `line-item-bulk.js` | ~760 | bulk set / paste |
-| `line-item-render.js` | ~710 | the editor UI (loops the registry) |
-| `line-item-options.js` | ~410 | local dropdown option lists |
-| `line-item-fields.js` | ~400 | **the field registry** |
-| `line-item-catalog.js` | ~490 | server-backed option lists |
-| `as400-format.js` | ~130 | the row plan |
+| `line-item-render.js` | ~710 | the editor UI — loops the registry |
+| `line-item-catalog.js` | ~490 | server-backed option lists (vendor / style / series / color) |
+| `line-item-options.js` | ~410 | localStorage-backed option lists (hardware / jamb / bore diameter) |
+| `line-item-fields.js` | ~390 | **the field registry** |
+| `line-item-groups.js` | ~150 | AS400 grouping (one order → multiple quotes) |
+| `line-item-geometry.js` | ~120 | inch/fraction math, callout ↔ width×height, rough-opening math |
+| `as400-format.js` | ~130 | `buildAs400RowPlan` — the single source of truth |
+
+Other big files: `app.js` (~1,300, page wiring), `stage-details-rendering.js` (~1,090, sales-process pane), `document-generation.js` (~940, Create Quote/Invoice/SO).

@@ -21,6 +21,8 @@ const FILES = [
   'static/js/app.js',
   'static/js/line-item-fields.js',
   'static/js/line-item-options.js',
+  'static/js/line-item-groups.js',
+  'static/js/line-item-geometry.js',
   'static/js/line-items.js',
   'static/js/line-item-render.js',
   'static/js/line-item-catalog.js',
