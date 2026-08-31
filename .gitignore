@@ -58,3 +58,6 @@ customer_app/flutter_files/.dart_tool/
 customer_app/flutter_files/.idea/
 customer_app/flutter_files/.flutter-plugins-dependencies
 customer_app/flutter_files/**/*.iml
+
+# Uploaded quote/invoice/PO/SOA files - large, not for git (see core.ATTACHMENTS_DIR)
+/attachments/

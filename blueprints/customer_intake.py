@@ -26,6 +26,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 from core import (
+    ATTACHMENTS_DIR,
     attach_po_display,
     compute_stage_priority,
     dict_from_row,
@@ -35,9 +36,8 @@ from core import (
 
 customer_intake_bp = Blueprint('customer_intake', __name__)
 
-# Matches the existing (pre-existing, unrelated-to-this-feature) convention
-# used by blueprints/attachments.py for where uploaded files physically live.
-ATTACHMENTS_BASE = Path(r"C:\Projects\Order-Tracker\attachments")
+# Where uploaded files physically live (see core.ATTACHMENTS_DIR).
+ATTACHMENTS_BASE = ATTACHMENTS_DIR
 
 # OrePac's own as-built item description (scraped from the quote's Cart
 # page) is free text, but its wording is consistent enough around a door's

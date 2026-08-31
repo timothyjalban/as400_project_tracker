@@ -511,7 +511,7 @@ def delete_order(order_id):
         
         # Delete attachment files
         import shutil
-        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        attach_base = ATTACHMENTS_DIR
         
         # Delete each file
         for att in attachments:

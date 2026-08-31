@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_file
 
-from core import dict_from_row, get_db_connection
+from core import ATTACHMENTS_DIR, dict_from_row, get_db_connection
 
 attachments_bp = Blueprint('attachments', __name__)
 
@@ -85,7 +85,7 @@ def upload_attachment(order_id):
             folder_name = f"{customer_slug}__ID-{order_id}"
 
         # Create attachments directory
-        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        attach_base = ATTACHMENTS_DIR
         order_dir = attach_base / folder_name
         order_dir.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +154,7 @@ def delete_attachment_endpoint(attachment_id):
             }), 404
 
         # Delete physical file
-        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        attach_base = ATTACHMENTS_DIR
         file_path = attach_base / row['rel_path']
 
         try:
@@ -196,7 +196,7 @@ def download_attachment(attachment_id):
 
         from flask import send_file
 
-        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        attach_base = ATTACHMENTS_DIR
         file_path = attach_base / row['rel_path']
 
         if not file_path.exists():
@@ -234,7 +234,7 @@ def open_attachment(attachment_id):
 
         from flask import send_file
 
-        attach_base = Path(r"C:\Projects\Order-Tracker\attachments")
+        attach_base = ATTACHMENTS_DIR
         file_path = attach_base / row['rel_path']
 
         if not file_path.exists():
@@ -283,7 +283,7 @@ def download_all_attachments(order_id):
         # Create ZIP in memory
         memory_file = io.BytesIO()
         with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-            attachments_dir = Path(r"C:\Projects\Order-Tracker\attachments")
+            attachments_dir = ATTACHMENTS_DIR
 
             for attachment in attachments:
                 file_path = attachments_dir / attachment['rel_path']

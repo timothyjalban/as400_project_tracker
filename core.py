@@ -142,6 +142,11 @@ DB_PATH = resolve_db_path(_env_db_path if _env_db_path else None)
 db_config.DB_PATH = DB_PATH
 DESKTOP_HELPER_BASE_URL = os.environ.get('DESKTOP_HELPER_BASE_URL', 'http://127.0.0.1:5001/api').rstrip('/')
 
+# Where uploaded quote / invoice / PO / SOA files live. One place, not 7.
+# Override via ORDER_TRACKER_ATTACHMENTS_PATH; defaults to <repo>/attachments.
+_env_attachments = (os.environ.get('ORDER_TRACKER_ATTACHMENTS_PATH') or '').strip()
+ATTACHMENTS_DIR = Path(_env_attachments) if _env_attachments else (Path(__file__).resolve().parent / 'attachments')
+
 
 def call_desktop_helper(endpoint: str, method: str = 'GET', payload: Optional[Dict[str, Any]] = None, timeout: float = 2.0):
     """Call local desktop helper service and return (payload_dict, status_code)."""
