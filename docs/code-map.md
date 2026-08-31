@@ -54,6 +54,7 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 | OCR / bulk import | `static/js/ocr-import.js` + `ocr_processor.py` + `blueprints/ocr.py`, `blueprints/import_export.py` |
 | DB schema / migrations | `core.py` |
 | Route registration | `app.py` → `blueprints/` |
+| Where the DB / attachments / OCR code lives | `orders.db` (root), `attachments/` (root, gitignored), `automation/` — all in this repo now. Override with `ORDER_TRACKER_DB_PATH` / `ORDER_TRACKER_ATTACHMENTS_PATH`. |
 
 ## Tests
 
