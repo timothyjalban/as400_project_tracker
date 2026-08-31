@@ -98,25 +98,20 @@ def _count_orders(path: Path) -> int:
 
 
 def _pick_default_db_path() -> Path:
+    """When ORDER_TRACKER_DB_PATH is not set: use the repo's orders.db, or a
+    temp-dir copy if that isn't writable. (No longer scans other machines'
+    paths and picks whichever has the most rows - that could silently open a
+    stale database.)"""
+    repo_db = Path(__file__).resolve().parent / 'orders.db'
     fallback = Path(tempfile.gettempdir()) / 'orders.db'
-    candidates = [
-        Path(db_config.DB_PATH),
-        Path(r"C:\Projects\Order-Tracker\orders.db"),
-        Path(r"C:\tmp\orders.db"),
-        fallback,
-    ]
 
-    best_path = None
-    best_count = -1
-    for candidate in candidates:
-        if not _is_writable_parent(candidate):
-            continue
-        count = _count_orders(candidate)
-        if count > best_count:
-            best_count = count
-            best_path = candidate
+    for candidate in (Path(db_config.DB_PATH), repo_db):
+        if _is_writable_parent(candidate) and _count_orders(candidate) >= 0:
+            return candidate
 
-    return best_path or fallback
+    if _is_writable_parent(repo_db):
+        return repo_db
+    return fallback
 
 
 def resolve_db_path(preferred_path):
