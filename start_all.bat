@@ -13,7 +13,7 @@ echo.
 
 cd /d "%~dp0"
 
-set "ORDER_TRACKER_DB_PATH=C:\Users\tim.alban\Desktop\HTML_Order_Tracker\orders.db"
+set "ORDER_TRACKER_DB_PATH=%~dp0orders.db"
 
 rem --- Secrets: real values live in secrets.local.bat (gitignored).
 rem     Copy secrets.local.bat.example to secrets.local.bat and fill it in.

@@ -57,9 +57,8 @@ then `npm run snapshots:update`.
 ## Environment
 
 - **Node** ≥ 18 (uses `node:vm`, no npm dependencies).
-- **Python** ≥ 3.10, able to import `scripts.launch_ibm` from the automation
-  project. Default path `C:\Projects\Order-Tracker`; override with
-  `DESKTOP_APP_PATH`. Its GUI deps are import-guarded, so nothing touches a screen.
+- **Python** ≥ 3.10 — imports `automation/launch_ibm.py` from this repo. Its GUI
+  deps (pyautogui etc.) are import-guarded, so nothing touches a screen.
 
 If `snapshot_macro.py` can't find `launch_ibm`, the preview half still runs
 standalone (`npm run snapshots:preview`).

@@ -22,13 +22,10 @@ Open PowerShell in this folder and run:
 pip install -r requirements.txt
 ```
 
-### 2. Update Database Path (if needed)
+### 2. Database Path
 
-Edit `app.py` line 12 to point to your database:
-
-```python
-DB_PATH = Path(r"C:\Projects\Order-Tracker\orders.db")
-```
+Defaults to `orders.db` at the repo root. Override with the
+`ORDER_TRACKER_DB_PATH` environment variable (the `start_*.bat` scripts set it).
 
 ### 3. Run the Server
 

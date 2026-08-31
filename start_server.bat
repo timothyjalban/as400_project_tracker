@@ -3,11 +3,7 @@ echo ========================================
 echo  Order Tracker Web App
 echo ========================================
 echo.
-if exist "C:\Projects\Order-Tracker\orders.db" (
-	set "ORDER_TRACKER_DB_PATH=C:\Projects\Order-Tracker\orders.db"
-) else (
-	set "ORDER_TRACKER_DB_PATH=C:\tmp\orders.db"
-)
+set "ORDER_TRACKER_DB_PATH=%~dp0orders.db"
 rem --- Secrets: real values live in secrets.local.bat (gitignored).
 rem     Copy secrets.local.bat.example to secrets.local.bat and fill it in.
 set "ORDER_TRACKER_CUSTOMER_INTAKE_API_KEY=CHANGE_ME"

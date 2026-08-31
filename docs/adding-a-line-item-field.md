@@ -115,4 +115,4 @@ will remind you if you miss one).
 | Structured row plan (preview = payload = typed) | `static/js/as400-format.js` — `buildAs400RowPlan()` |
 | Description string builder | `static/js/line-item-as400.js` — `buildCtrlAltSDescription()` |
 | Comment block builder | `static/js/line-item-as400.js` — `buildStandardAs400CommentPreview()` |
-| What actually types it | `C:\Projects\Order-Tracker\scripts\launch_ibm.py` (separate repo — see plan Step 4) |
+| What actually types it | `automation/launch_ibm.py` |

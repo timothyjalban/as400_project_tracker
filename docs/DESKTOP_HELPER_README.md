@@ -40,14 +40,10 @@ cd "C:\Users\tim.alban\Desktop\HTML Order Tracker"
 pip install flask flask-cors
 ```
 
-### 2. Verify Desktop App Location
+### 2. Automation code
 
-The service expects the desktop app at: `C:\Projects\Order-Tracker`
-
-If your desktop app is elsewhere, edit `desktop_helper_service.py` line 19:
-```python
-DESKTOP_APP_PATH = Path(r"C:\Your\Custom\Path\Order-Tracker")
-```
+The AS400 automation (`launch_ibm.py` + the `.ahk` macros) is vendored into
+`automation/` in this repo. Nothing to configure.
 
 ### 3. Verify IBM ACS Installation
 
@@ -144,9 +140,8 @@ Launch AS400 special order creation automation.
 - Verify it's listening on port 5001 (check terminal output)
 - Make sure no firewall is blocking localhost:5001
 
-### "Failed to import launch_ibm module"
-- Verify desktop app path in `desktop_helper_service.py` line 19
-- Check that `C:\Projects\Order-Tracker\scripts\launch_ibm.py` exists
+### "Failed to import automation/launch_ibm.py"
+- Check that `automation/launch_ibm.py` exists in the repo
 
 ### AS400 doesn't open
 - Verify IBM ACS is installed at: `C:\Users\Public\IBM\ClientSolutions\...`
