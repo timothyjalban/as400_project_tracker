@@ -23,15 +23,16 @@ logger = logging.getLogger(__name__)
 if os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# Import the desktop app's parser
-DESKTOP_APP_PATH = Path(r"C:\Projects\Order-Tracker")
+# Form parsers + the headless OCR extractor, vendored into automation/ from the
+# old desktop project.
+DESKTOP_APP_PATH = Path(__file__).resolve().parent / "automation"
 sys.path.insert(0, str(DESKTOP_APP_PATH))
 
 try:
     from bulk_form_parser import BulkFormParser
     from intake_form_parser import IntakeFormParser
 except ImportError as e:
-    logger.warning("Could not import parsers from desktop app: %s", e)
+    logger.warning("Could not import form parsers from automation/: %s", e)
     BulkFormParser = None
     IntakeFormParser = None
 
