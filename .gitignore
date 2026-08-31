@@ -42,6 +42,13 @@ Thumbs.db
 # Frontend tooling (if added later)
 node_modules/
 
+# Snapshot harness: fixtures/snapshots exported from the live DB hold real
+# customer names + pricing. Only the hand-written synthetic set is committed.
+tests/fixtures/orders/*
+!tests/fixtures/orders/syn-*.json
+tests/snapshots/*
+!tests/snapshots/syn-*
+
 # Or-Pac scraper debug artifacts (screenshots/HTML may contain session data)
 scripts/_orepac_debug/
 

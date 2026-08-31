@@ -1,0 +1,14 @@
+# syn-03-hardware-emtek
+# order syn-03  needs_prefit=False  items=1
+resolved_vendor_sku: 243581
+
+=== item 1  (hardware) ===
+sku:         243581
+description: EMTEK-5040 Modern Rectangular US15 L
+um:          EA
+price:       284.00
+qty:         1
+  [row-plan] sku=243581 | desc=EMTEK-5040 Modern Rectangular US15 L | um=EA | price=284.00 | qty=1
+comment:
+             ROOM: Entry
+             2 3/8" | Keyed

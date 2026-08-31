@@ -1,0 +1,14 @@
+# syn-02-window-milgard-slider
+# 1 rows
+
+--- row 1 ---
+sku:          660509
+description:  RO 48 x 36 XO V400  [18 ch]
+um:           EA
+price:        578.77
+qty:          1
+fresh comment: true
+  | ROOM: LR
+  | Milgard | 1 3/8" SB | EXT/INT:
+  | White | GLASS: Low-E | Argon |
+  | HANDING: Slider

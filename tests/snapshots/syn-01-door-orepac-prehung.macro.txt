@@ -1,0 +1,15 @@
+# syn-01-door-orepac-prehung
+# order syn-01  needs_prefit=False  items=1
+resolved_vendor_sku: 660775
+
+=== item 1  (door) ===
+sku:         660775
+description: 3068 1-3/4 SC 20 PRM SHAKER PH
+um:          EA
+price:       612.40
+qty:         1
+  [row-plan] sku=660775 | desc=RO 3068 1-3/4 SC 20 PRM SHAKER PH | um=EA | price=612.40 | qty=1
+comment:
+             ROOM: Entry
+             Orepac | 20 | Shaker Prehung | Primed
+             SWING: LHIS | JAMB: 4 9/16

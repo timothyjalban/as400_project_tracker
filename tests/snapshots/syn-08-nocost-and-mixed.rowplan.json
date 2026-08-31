@@ -1,0 +1,30 @@
+[
+  {
+    "commentLines": [
+      "ROOM: Hall",
+      "Orepac | 20 | Shaker Prehung |",
+      "Primed",
+      "SWING: LHIS | JAMB: 4 9/16"
+    ],
+    "description": "RO 2668 1-3/8 HC 20 PRM SHAKER PH",
+    "entersFreshComment": true,
+    "price": "288.00",
+    "qty": 1,
+    "sku": "",
+    "um": "EA"
+  },
+  {
+    "commentLines": [
+      "ROOM: Hall",
+      "Orepac | 20 | Jamb Kit |",
+      "Primed",
+      "No charge - replacement jamb"
+    ],
+    "description": "RO 2668 20 PRM JAMB KIT",
+    "entersFreshComment": true,
+    "price": "0.00",
+    "qty": 1,
+    "sku": "",
+    "um": "NC"
+  }
+]

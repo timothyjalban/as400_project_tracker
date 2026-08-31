@@ -326,6 +326,7 @@ def launch_quote():
         line_items = data.get('line_items', [])
         vendor_sku = data.get('vendor_sku', '')
         line_items, vendor_sku = _enrich_line_items_with_vendor_sku(line_items, vendor_sku)
+        as400_row_plan = data.get('as400_row_plan') or None
         needs_prefit = data.get('needs_prefit', False)
         prefit_meta = data.get('prefit_meta', None)
         
@@ -377,6 +378,7 @@ def launch_quote():
             vendor_sku=vendor_sku,
             needs_prefit=needs_prefit,
             prefit_meta=prefit_meta,
+            as400_row_plan=as400_row_plan,
         )
         
         # Check if quote fields were captured
@@ -461,6 +463,7 @@ def launch_invoice():
         customer_number = (data.get('customer_number') or '').strip()
         has_account = bool(data.get('has_customer_account', False)) and _is_real_account_number(customer_number)
         line_items = data.get('line_items', [])
+        as400_row_plan = data.get('as400_row_plan') or None
         vendor_sku = (data.get('vendor_sku') or '').strip()
         line_items, vendor_sku = _enrich_line_items_with_vendor_sku(line_items, vendor_sku)
         size = (data.get('size') or '').strip()
@@ -513,6 +516,7 @@ def launch_invoice():
             order_stage=order_stage,
             line_items=line_items,
             vendor_sku=vendor_sku,
+            as400_row_plan=as400_row_plan,
         )
 
         captured_invoice = None

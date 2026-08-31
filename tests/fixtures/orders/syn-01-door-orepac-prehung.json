@@ -1,0 +1,32 @@
+{
+  "id": "syn-01",
+  "customer_name": "Sample One",
+  "vendor_sku": "",
+  "needs_prefit": false,
+  "prefit_meta": null,
+  "line_items": [
+    {
+      "type": "door",
+      "quantity": 1,
+      "size_mode": "rough_opening",
+      "vendor": "Orepac",
+      "vendor_sku": "",
+      "room": "Entry",
+      "style": "Shaker Prehung",
+      "series": "",
+      "model": "20",
+      "material": "Primed",
+      "core": "SC",
+      "sticking": "",
+      "swing": "LHIS",
+      "jamb_size": "4 9/16",
+      "callout_size": "3068",
+      "width": "",
+      "height": "",
+      "notes": "",
+      "price": "612.40",
+      "door_thickness": "1-3/4",
+      "panel_style": "2 Panel"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "syn-06",
+  "customer_name": "Sample Six",
+  "vendor_sku": "",
+  "needs_prefit": true,
+  "prefit_meta": {
+    "rough_opening": "37 x 81.25",
+    "thickness": "1-3/4",
+    "hc_sc": "SC",
+    "door_cfg": "Slab"
+  },
+  "line_items": [
+    {
+      "type": "door",
+      "quantity": 1,
+      "size_mode": "rough_opening",
+      "vendor": "Simpson",
+      "vendor_sku": "",
+      "room": "Entry",
+      "style": "Slab",
+      "series": "",
+      "model": "Knotty Alder",
+      "material": "Alder",
+      "core": "",
+      "sticking": "",
+      "swing": "RHIS",
+      "jamb_size": "",
+      "callout_size": "3068",
+      "width": "",
+      "height": "",
+      "notes": "",
+      "price": "845.00",
+      "door_thickness": "1-3/4",
+      "prefit_enabled": true,
+      "prefit_width": "37",
+      "prefit_height": "81 1/4",
+      "prefit_thickness": "1-3/4",
+      "prefit_swing": "RHIS",
+      "prefit_hinge_top": "7",
+      "prefit_hinge_middle": "35 1/2",
+      "prefit_hinge_bottom": "65 7/8",
+      "prefit_hinge_width": "4\"",
+      "prefit_hinge_backset": "1/4\"",
+      "prefit_bore_type": "Single",
+      "prefit_bore_single": "36",
+      "prefit_bore_diameter": "2 1/8\""
+    }
+  ]
+}

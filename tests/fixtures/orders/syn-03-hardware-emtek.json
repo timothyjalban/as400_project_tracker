@@ -1,0 +1,24 @@
+{
+  "id": "syn-03",
+  "customer_name": "Sample Three",
+  "vendor_sku": "",
+  "needs_prefit": false,
+  "prefit_meta": null,
+  "line_items": [
+    {
+      "type": "hardware",
+      "quantity": 1,
+      "vendor": "Emtek",
+      "vendor_sku": "",
+      "room": "Entry",
+      "hardware_product_code": "EMTEK-5040",
+      "hardware_lever_knob_style": "Modern Rectangular",
+      "hardware_finish_code": "US15",
+      "hardware_handing": "LH",
+      "hardware_backset": "2 3/8\"",
+      "hardware_keying": "Keyed",
+      "notes": "",
+      "price": "284.00"
+    }
+  ]
+}

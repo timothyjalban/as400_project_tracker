@@ -1,0 +1,14 @@
+# syn-03-hardware-emtek
+# order syn-03  needs_prefit=false  items=1
+
+=== item 1  (hardware) ===
+ROOM: Entry
+2 3/8" | Keyed
+
+--- Ctrl+Alt+S Preview ---
+Ctrl+Alt+S Fields:
+SKU: (blank)
+Description: EMTEK-5040 Modern Rectangular US15 L
+U/M: EA
+Price: 284.00
+Qty: 1
