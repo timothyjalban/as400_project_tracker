@@ -435,6 +435,11 @@ async function createQuote(groupName = null) {
         ? await ensureAdditionalQuoteForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
         : null;
     const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
+    // Single source of truth for what the macro types (Step 1). Sent alongside
+    // line_items; the desktop helper prefers it when AS400_USE_ROW_PLAN is set.
+    const as400RowPlan = typeof buildAs400RowPlan === 'function'
+        ? buildAs400RowPlan(automationOrder, sourceLineItems)
+        : null;
     const fallbackVendorSku = sanitizeVendorSku(lineItemsForAutomation.find(item => item.vendor_sku)?.vendor_sku || automationOrder.vendor_sku || '');
     const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || automationOrder.vendor || '';
     
@@ -460,6 +465,7 @@ async function createQuote(groupName = null) {
                     customer_number: automationOrder.customer_number,
                     has_customer_account: automationOrder.has_customer_account,
                     line_items: lineItemsForAutomation,
+                    as400_row_plan: as400RowPlan,
                     as400_group: normalizedGroupName,
                     vendor_sku: fallbackVendorSku,
                     needs_prefit: automationOrder.needs_prefit,
@@ -586,6 +592,9 @@ async function createInvoice(groupName = null) {
         ? await ensureAdditionalInvoiceForAs400Group(actionOrder.id, normalizedGroupName, sourceLineItems)
         : null;
     const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
+    const as400RowPlan = typeof buildAs400RowPlan === 'function'
+        ? buildAs400RowPlan(actionOrder, sourceLineItems)
+        : null;
     const fallbackVendorSku = sanitizeVendorSku(lineItemsForAutomation.find(item => item?.vendor_sku)?.vendor_sku || actionOrder.vendor_sku || '');
     const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || actionOrder.vendor || '';
     const groupQuoteNumber = getQuoteNumberForAs400Group(actionOrder, normalizedGroupName) || actionOrder.quote_number || '';
@@ -612,6 +621,7 @@ async function createInvoice(groupName = null) {
                     customer_number: actionOrder.customer_number,
                     has_customer_account: actionOrder.has_customer_account,
                     line_items: lineItemsForAutomation,
+                    as400_row_plan: as400RowPlan,
                     as400_group: normalizedGroupName,
                     vendor_sku: fallbackVendorSku,
                     size: actionOrder.size || '',
@@ -725,6 +735,9 @@ async function createSpecialOrder(groupName = null) {
         return;
     }
     const lineItemsForAutomation = sourceLineItems.map(mapLineItemForAs400Automation);
+    const as400RowPlan = typeof buildAs400RowPlan === 'function'
+        ? buildAs400RowPlan(actionOrder, sourceLineItems)
+        : null;
     const groupVendor = lineItemsForAutomation.find(item => item.vendor)?.vendor || actionOrder.vendor || '';
 
     const helperAvailable = await checkDesktopHelper();
@@ -744,6 +757,7 @@ async function createSpecialOrder(groupName = null) {
                     quote_number: specialOrderSourceNumber,
                     invoice_number: actionOrder.invoice_number,
                     line_items: lineItemsForAutomation,
+                    as400_row_plan: as400RowPlan,
                     as400_group: normalizeAs400AutomationGroupName(groupName)
                 }
             });

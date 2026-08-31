@@ -300,13 +300,17 @@ function sizeModePrefixText(item) {
 function doorSizeText(item) {
     const raw = normalizeMacroText(macroItemValue(item, 'callout_size', 'size'));
     const compact = raw.replace(/\s+/g, '');
-    if (compact && /^\d{4}$/.test(compact)) return `${compact[0]}/${compact[1]} ${compact[2]}/${compact[3]}`;
+    // Bare numeric callouts stay compact in the AS400 description (2668, 6068,
+    // 21068) - that's the form the shop keys. Expanded "2/6 6/8" is not used.
+    if (/^\d{4,6}$/.test(compact)) return compact;
     if (raw && raw.includes('/')) return raw;
 
     const width = macroItemValue(item, 'width');
     const height = macroItemValue(item, 'height');
     if (width && height) return `${normalizeMacroText(width)} x ${normalizeMacroText(height)}`;
-    return '';
+
+    // Never drop a size we were given - fall back to the raw callout string.
+    return raw;
 }
 
 function doorThicknessText(item) {
@@ -847,6 +851,24 @@ function buildStandardAs400CommentPreview(item) {
 function buildAs400CommentPreview(item) {
     if (!item) return '';
 
+    // Preferred path: render this row straight from the shared AS400 row plan, so
+    // the preview shows exactly what the macro will type - including comment
+    // inheritance between consecutive matching rows.
+    const siblings = Array.isArray(currentLineItems) ? currentLineItems : [];
+    const rowIndex = siblings.indexOf(item);
+    if (rowIndex !== -1 && typeof buildAs400RowPlan === 'function') {
+        const plan = buildAs400RowPlan(currentOrder, siblings);
+        const entry = plan[rowIndex];
+        if (entry) {
+            let ownerRow = rowIndex + 1;
+            for (let j = rowIndex; j >= 0; j--) {
+                if (plan[j] && plan[j].entersFreshComment) { ownerRow = j + 1; break; }
+            }
+            return formatAs400RowPlanEntry(entry, rowIndex + 1, ownerRow);
+        }
+    }
+
+    // Fallback (item not in the active editor list): single-item preview.
     const previewItem = (typeof mapLineItemForAs400Automation === 'function')
         ? mapLineItemForAs400Automation(item)
         : item;
