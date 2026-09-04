@@ -35,6 +35,10 @@ async function selectOrder(orderId) {
     if (selectedOrderId !== Number(orderId)) return;
 
     const selectedOrder = hydrated || getSelectedOrder();
+    // Keep the currentOrder cache coherent with the list selection. Nothing
+    // else does this on a plain click, so stale values leaked into actions
+    // that target "the active order" (quote import, uploads, stage actions).
+    currentOrder = selectedOrder || null;
     openProcessStages = new Set();
     if (selectedOrder && selectedOrder.stage && STAGES.includes(selectedOrder.stage)) {
         openProcessStages.add(selectedOrder.stage);
@@ -157,17 +161,11 @@ async function moveSelectedOrderStage(direction) {
     attachAdditionalTrackingPayload(payload);
 
     try {
-        const response = await fetch(`${API_BASE}/orders/${order.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-        if (!result.success || !result.order) {
-            showError(result.error || 'Failed to update stage');
+        const { ok, status, result } = await putOrder(order.id, payload, { source: 'move-stage' });
+        if (!ok || !result.order) {
+            if (status !== 409 && status !== 0) {
+                showError(result.error || 'Failed to update stage');
+            }
             return;
         }
 

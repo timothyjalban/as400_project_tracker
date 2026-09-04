@@ -98,11 +98,22 @@ function getFileIcon(filename) {
 }
 
 function getActiveOrderContext() {
+    // The order highlighted in the list (selectedOrderId) is the source of
+    // truth for "which order am I acting on". `currentOrder` is a cache that
+    // several unrelated actions write to and nothing clears on plain
+    // selection, so it can lag a list click by one order - trusting it first
+    // made "Import Quote Into Order" / file uploads land on the previously
+    // touched order instead of the one on screen.
+    const selected = getSelectedOrder();
+    if (selected && selected.id) {
+        return selected;
+    }
+
     if (currentOrder && currentOrder.id) {
         return currentOrder;
     }
 
-    return getSelectedOrder();
+    return null;
 }
 
 function openProcessFilePicker() {

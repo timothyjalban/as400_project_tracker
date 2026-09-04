@@ -30,8 +30,9 @@ const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 
 const previewStatus = run('preview (browser)', process.execPath, [path.join('tests', 'snapshot_preview.mjs'), ...jsArgs]);
 const macroStatus = run('macro (AS400 typist)', python, [path.join('tests', 'snapshot_macro.py'), ...pyArgs]);
 const registryStatus = run('field registry', process.execPath, [path.join('tests', 'line_item_fields.mjs')]);
+const fieldConfigStatus = run('field config defaults', process.execPath, [path.join('tests', 'line_item_field_config.mjs')]);
 
-const worst = Math.max(previewStatus, macroStatus, registryStatus);
+const worst = Math.max(previewStatus, macroStatus, registryStatus, fieldConfigStatus);
 console.log('\n' + '═'.repeat(44));
 if (worst === 0) {
   console.log(update ? 'snapshots regenerated.' : 'all snapshots OK - AS400 output unchanged.');

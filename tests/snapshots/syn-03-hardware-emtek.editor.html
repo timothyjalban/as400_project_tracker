@@ -11,6 +11,8 @@
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="quote" data-as400-group-name="Emtek">Create Quote</button>
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="invoice" data-as400-group-name="Emtek">Charge Sale</button>
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="special-order" data-as400-group-name="Emtek">Special Order</button>
+<button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="add-delivery" data-as400-group-name="Emtek" title="Add the $125 delivery line (Ctrl+Alt+D) to the AS400 quote open on screen">Add Delivery</button>
+<button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="delivery-tag" data-as400-group-name="Emtek" title="Create a separate AS400 quote with only the $125 delivery line">Delivery Tag</button>
 </div>
 </div>
 <div class="line-item-card as400-group-card as400-group-cyan" data-line-item-card="0" data-as400-group-card="Emtek">
@@ -96,8 +98,10 @@
 <select data-item-index="0" data-item-field="hardware_lever_knob_style">
 <option value="">Select lever/knob style</option>
 <option value="Modern Rectangular" selected>Modern Rectangular</option>
-<option value="+ Add New Lever/Knob Style" >+ Add New Lever/Knob Style</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="hardware_lever_knob_style" data-edit-field-scope="hardware"
+title="Edit Lever/Knob Style choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Finish</label>
@@ -138,15 +142,22 @@
 <option value="Reversible" >Reversible</option>
 <option value="N/A" >N/A</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="hardware_handing" data-edit-field-scope="hardware"
+title="Edit Handing choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Backset</label>
 <select data-item-index="0" data-item-field="hardware_backset">
 <option value="">Select backset</option>
+<option value="2 3/8&quot;" selected>2 3/8"</option>
 <option value="2-3/8&quot;" >2-3/8"</option>
 <option value="2-3/4&quot;" >2-3/4"</option>
 <option value="Adjustable" >Adjustable</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="hardware_backset" data-edit-field-scope="hardware"
+title="Edit Backset choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Bore</label>
@@ -158,6 +169,9 @@
 <option value="Mortise Prep" >Mortise Prep</option>
 <option value="N/A" >N/A</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="hardware_bore" data-edit-field-scope="hardware"
+title="Edit Bore choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Keying</label>

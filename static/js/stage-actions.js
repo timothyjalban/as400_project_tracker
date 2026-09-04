@@ -124,20 +124,17 @@ async function performAutosave() {
         if (broughtDoorCheckbox) data.prefit_customer_brought_door = broughtDoorCheckbox.checked ? 1 : 0;
         if (ventTopCheckbox) data.prefit_vent_top = ventTopCheckbox.checked ? 1 : 0;
         if (ventBottomCheckbox) data.prefit_vent_bottom = ventBottomCheckbox.checked ? 1 : 0;
-        // Send update request
-        const response = await fetch(`${API_BASE}/orders/${currentOrder.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Silent autosave - no toast notification
-            console.log('Autosaved order', currentOrder.id);
+
+        // Autosave is the riskiest writer (fires silently on any input): route it
+        // through the cross-order guard so a debounced save can never land on an
+        // order the form has since navigated away from.
+        const autosaveTargetId = currentOrder.id;
+        const { ok, status, result } = await putOrder(autosaveTargetId, data, { source: 'autosave' });
+
+        if (ok) {
+            console.log('Autosaved order', autosaveTargetId);
+        } else if (status === 409) {
+            console.warn('Autosave blocked as cross-order for', autosaveTargetId);
         }
     } catch (error) {
         console.error('Autosave failed:', error);

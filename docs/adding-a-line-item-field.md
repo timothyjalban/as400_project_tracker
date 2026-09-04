@@ -68,15 +68,26 @@ silently fall behind.
    field, toggles visibility). Add a branch in `updateLineItem()` in
    `static/js/line-items.js`. Plain fields need nothing here.
 
-5. **Dropdown options** — if `control: 'select'` with a managed option list, add
-   the getter + the "+ add new" endpoint. Frontend:
-   `static/js/line-item-catalog.js`. Backend:
-   `blueprints/line_item_options.py`.
+5. **Dropdown options** — three kinds:
+   - **User-editable, DB-backed (preferred for plain lists):** set
+     `render.optionsSource: 'fieldConfig'` (no `render.options` array) and add
+     the field + its factory choices to `data/line_item_field_defaults.json`.
+     It then appears in the **Line-Item Fields** settings screen and gets an
+     inline ✎ editor; choices/label/per-option AS400 text are all editable from
+     the app with no code change. See `static/js/field-config.js`,
+     `blueprints/field_config.py`, `core.py` (`ensure_line_item_field_config_schema`).
+   - **Catalog lists** (style / vendor / series / colors / fin type): the
+     `➕ Add New` prompt flow — `static/js/line-item-catalog.js` +
+     `blueprints/line_item_options.py`.
+   - **Static, not user-editable:** a plain `render.options: [...]` array.
 
 6. **AS400 output** — if it should show in the preview *and* the typed order:
    - Set `as400: { target, order, format }` on the registry entry.
    - Implement `format` in `static/js/line-item-as400.js` (a small function that
-     takes the item and returns a string).
+     takes the item and returns a string). For a managed dropdown, call
+     `optAs400('<key>', value, scope)` at the top of that function and return it
+     when truthy — that lets the per-option "AS400 text" from the settings
+     screen override the abbreviation.
    - Add a call to it in the right builder: `buildCtrlAltSDescription()` for
      `target: 'description'`, `buildStandardAs400CommentPreview()` for
      `target: 'comment'`.

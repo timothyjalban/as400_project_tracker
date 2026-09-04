@@ -20,34 +20,37 @@ const BULK_SET_FIELDS = [
     ] },
     { value: 'fin_type',       label: 'Fin Type',        type: 'select',   scope: 'window' },
     { value: 'argon',          label: 'Argon',           type: 'select',   scope: 'both',   options: ['Argon'] },
-    // door-only
-    { value: 'material',       label: 'Material',        type: 'select',   scope: 'door',   options: ['Wood', 'Primed', 'Fiberglass', 'Steel', 'Vinyl'] },
-    { value: 'door_texture',   label: 'Texture',         type: 'select',   scope: 'door',   options: ['Smooth-Star', 'Classic Craft Fir Grain', 'Classic Craft Mahogany Grain', 'Classic Craft Canvas', 'Fiber-Classic Oak Collection', 'Fiber-Classic Mahogany Collection', 'Traditions', 'Profiles'] },
-    { value: 'core',           label: 'Core',            type: 'select',   scope: 'door',   options: ['Hollow Core', 'Solid Core'] },
-    { value: 'sticking',       label: 'Sticking',        type: 'select',   scope: 'door',   options: ['Square', 'Ovolo', 'Shaker'] },
-    { value: 'swing',          label: 'Swing',           type: 'select',   scope: 'door',   options: ['LH', 'RH', 'LH Outswing', 'RH Outswing'] },
-    { value: 'thickness',      label: 'Thickness',       type: 'select',   scope: 'door',   options: ['1-3/8"', '1-3/4"'] },
+    // door-only. Managed dropdowns (material, core, sticking, ...) get their
+    // choices from the DB via _getBulkValueOptions -> fieldConfigChoiceValues;
+    // no inline options[] here so the two can't diverge.
+    { value: 'material',       label: 'Material',        type: 'select',   scope: 'door' },
+    { value: 'door_texture',   label: 'Texture',         type: 'select',   scope: 'door' },
+    { value: 'core',           label: 'Core',            type: 'select',   scope: 'door' },
+    { value: 'sticking',       label: 'Sticking',        type: 'select',   scope: 'door' },
+    { value: 'swing',          label: 'Swing',           type: 'select',   scope: 'door' },
+    { value: 'thickness',      label: 'Thickness',       type: 'select',   scope: 'door' },
     { value: 'jamb_size',      label: 'Jamb Size',       type: 'select',   scope: 'door' },
-    { value: 'glass_tint',     label: 'Glass Tint',      type: 'select',   scope: 'door',   options: ['Clear', 'Obscure', 'Low-E', 'Tempered'] },
-    { value: 'door_glass_shape', label: 'Lite Shape',    type: 'text',     scope: 'door' },
-    { value: 'door_glass_lite_style', label: 'Lite Style', type: 'text',   scope: 'door' },
-    { value: 'door_frame_profile', label: 'Lite Frame',  type: 'select',   scope: 'door',   options: ['Flat Lite Frame', 'Scrolled Lite Frame'] },
-    { value: 'finish_type',    label: 'Finish Type',     type: 'select',   scope: 'door',   options: ['Primed', 'Unfinished', 'Prefinished'] },
-    { value: 'finish_detail',  label: 'Wood Species / Stain Color', type: 'text', scope: 'door' },
-    { value: 'panel_style',    label: 'Panel Style',     type: 'select',   scope: 'door',   options: ['1 Panel', '2 Panel', '3 Panel', '4 Panel', '5 Panel', '6 Panel', '1 Lite', '2 Lite', '3 Lite', '5 Lite', '10 Lite', '15 Lite', 'Louver', 'Plank'] },
-    { value: 'boring',         label: 'Boring',          type: 'select',   scope: 'door',   options: ['Single', 'Double', 'None'] },
-    { value: 'hinge_size',     label: 'Hinge Size',      type: 'select',   scope: 'door',   options: ['3"', '3-1/2"', '4"', '4-1/2"'] },
-    { value: 'hinge_finish',   label: 'Hinge Finish',    type: 'select',   scope: 'door',   options: ['Satin Nickel', 'Oil-Rubbed Bronze', 'Bright Brass', 'Polished Chrome', 'Brushed Chrome', 'Black'] },
-    { value: 'exterior_trim',  label: 'Exterior Trim',   type: 'select',   scope: 'door',   options: ['Brickmould', 'No Exterior Trim'] },
-    { value: 'sill',           label: 'Sill',            type: 'text',     scope: 'door' },
-    { value: 'hardware_option', label: 'Hardware',       type: 'select',   scope: 'door',   options: ['Standard', 'Lever', 'Knob', 'Deadbolt'] },
+    { value: 'glass_tint',     label: 'Glass Tint',      type: 'select',   scope: 'door' },
+    { value: 'door_glass_shape', label: 'Lite Shape',    type: 'select',   scope: 'door' },
+    { value: 'door_glass_lite_style', label: 'Lite Style', type: 'select', scope: 'door' },
+    { value: 'door_frame_profile', label: 'Lite Frame',  type: 'select',   scope: 'door' },
+    { value: 'finish_type',    label: 'Finish Type',     type: 'select',   scope: 'door' },
+    { value: 'finish_wood_species', label: 'Wood Species', type: 'select',  scope: 'door' },
+    { value: 'finish_stain_color',  label: 'Stain Color',  type: 'select',  scope: 'door' },
+    { value: 'panel_style',    label: 'Panel Style',     type: 'select',   scope: 'door' },
+    { value: 'boring',         label: 'Boring',          type: 'select',   scope: 'door' },
+    { value: 'hinge_size',     label: 'Hinge Size',      type: 'select',   scope: 'door' },
+    { value: 'hinge_finish',   label: 'Hinge Finish',    type: 'select',   scope: 'door' },
+    { value: 'exterior_trim',  label: 'Exterior Trim',   type: 'select',   scope: 'door' },
+    { value: 'sill',           label: 'Sill',            type: 'select',   scope: 'door' },
+    { value: 'hardware_option', label: 'Hardware',       type: 'select',   scope: 'door' },
     { value: 'qlon',           label: 'Q-lon Weatherstripping', type: 'checkbox', scope: 'door' },
     // window-only
     { value: 'operation',      label: 'Handing',         type: 'select',   scope: 'window' },
-    { value: 'frame',          label: 'Frame',           type: 'select',   scope: 'window', options: ['Vinyl', 'Wood', 'Aluminum', 'Fiberglass'] },
+    { value: 'frame',          label: 'Frame',           type: 'select',   scope: 'window' },
     // Doors' lite count now lives in panel_style (1 Lite/2 Lite/...) --
     // this field is window-only to avoid the two disagreeing on a door.
-    { value: 'glass',          label: 'Glass',           type: 'select',   scope: 'window', options: ['Clear', 'Low-E', 'Obscure'] },
+    { value: 'glass',          label: 'Glass',           type: 'select',   scope: 'window' },
     { value: 'tempered_glass', label: 'Tempered Glass',  type: 'checkbox', scope: 'window' },
     // text / numeric
     { value: 'width',          label: 'Width',           type: 'text',     scope: 'both' },
@@ -408,10 +411,21 @@ function _loadBulkDefaultsForOrder(orderId) {
 
 function _getBulkValueOptions(fieldDef) {
     if (!fieldDef) return [];
+    // `style` is polymorphic: door styles are DB-managed, window/hardware still
+    // catalog. Merge so a bulk-set across mixed item types offers all of them.
+    if (fieldDef.value === 'style') {
+        const door = (typeof fieldConfigChoiceValues === 'function' ? fieldConfigChoiceValues('style') : [])
+            .map(o => (o && typeof o === 'object' ? o.value : o));
+        return [...new Set([...door, ...getStyleOptionsForType('window'), ...getStyleOptionsForType('hardware')])];
+    }
+    // Other DB-managed dropdowns (Line-Item Fields settings screen) win over any
+    // inline options[] this bulk-set field def still carries.
+    if (typeof isFieldConfigManaged === 'function' && isFieldConfigManaged(fieldDef.value)) {
+        return fieldConfigChoiceValues(fieldDef.value);
+    }
     if (fieldDef.options) return fieldDef.options;
 
     switch (fieldDef.value) {
-        case 'style':   return [...getStyleOptionsForType('door'), ...getStyleOptionsForType('window').filter(o => !getStyleOptionsForType('door').includes(o))];
         case 'vendor':  return [...getVendorOptionsForType('door'), ...getVendorOptionsForType('window').filter(o => !getVendorOptionsForType('door').includes(o))];
         case 'series':  return Object.values(vendorSeriesOptions).flatMap(byVendor => Object.values(byVendor).flat()).filter((v, i, a) => v && a.indexOf(v) === i);
         case 'hardware_product_code': return Object.values(vendorSeriesOptions.hardware || {}).flat().filter((v, i, a) => v && a.indexOf(v) === i);

@@ -127,6 +127,8 @@ def desktop_helper_action_proxy(action):
         'launch-quote',
         'launch-invoice',
         'launch-special-order',
+        'launch-delivery-quote',
+        'add-delivery',
         'open-quote',
         'open-invoice',
         'open-special-order',

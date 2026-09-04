@@ -72,10 +72,16 @@ function saveWindowHandingOptions() {
     }
 }
 
+// Window handing / jamb size / bore diameter / lever-knob lists moved to the
+// DB (line_item_field_options) - these accessors now read the field-config
+// cache so bulk-set and any stragglers keep working. Manage them in the
+// Line-Item Fields settings screen.
 function getWindowHandingOptions() {
-    return Array.isArray(windowHandingOptions) && windowHandingOptions.length > 0
-        ? windowHandingOptions
-        : [...DEFAULT_WINDOW_HANDING_OPTIONS];
+    if (typeof fieldConfigActiveRows === 'function') {
+        const rows = fieldConfigActiveRows('operation', 'window').map(r => r.value);
+        if (rows.length) return rows;
+    }
+    return [...DEFAULT_WINDOW_HANDING_OPTIONS];
 }
 
 function uniqueSortedOptions(values) {
@@ -153,11 +159,13 @@ function rememberHardwareProductCode(vendorName, value) {
 }
 
 function getHardwareLeverKnobStyleOptions(currentValue = '') {
+    const configured = typeof fieldConfigActiveRows === 'function'
+        ? fieldConfigActiveRows('hardware_lever_knob_style', 'hardware').map(r => r.value)
+        : [];
     const currentOrderStyles = (Array.isArray(currentLineItems) ? currentLineItems : [])
         .filter(candidate => String(candidate?.type || '').toLowerCase() === 'hardware')
         .map(candidate => candidate?.hardware_lever_knob_style);
-    const options = uniqueSortedOptions([...hardwareLeverKnobStyleOptions, ...currentOrderStyles, currentValue]);
-    return [...options, '+ Add New Lever/Knob Style'];
+    return uniqueSortedOptions([...configured, ...currentOrderStyles, currentValue]);
 }
 
 function isHardwareProductCodeValue(value) {
@@ -276,9 +284,11 @@ function saveJambSizeOptions() {
 }
 
 function getJambSizeOptions() {
-    return Array.isArray(jambSizeOptions) && jambSizeOptions.length > 0
-        ? jambSizeOptions
-        : [...DEFAULT_JAMB_SIZE_OPTIONS];
+    if (typeof fieldConfigActiveRows === 'function') {
+        const rows = fieldConfigActiveRows('jamb_size', 'door').map(r => r.value);
+        if (rows.length) return rows;
+    }
+    return [...DEFAULT_JAMB_SIZE_OPTIONS];
 }
 
 function rememberJambSizeOption(rawValue) {
@@ -381,6 +391,10 @@ function savePrefitBoreDiameterOptions() {
 }
 
 function getPrefitBoreDiameterOptions() {
+    if (typeof fieldConfigActiveRows === 'function') {
+        const rows = fieldConfigActiveRows('prefit_bore_diameter', 'door').map(r => r.value);
+        if (rows.length) return rows;
+    }
     if (!Array.isArray(prefitBoreDiameterOptions) || prefitBoreDiameterOptions.length === 0) {
         loadPrefitBoreDiameterOptions();
     }

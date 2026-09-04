@@ -12,6 +12,7 @@ import tempfile
 import types
 import importlib.util
 import logging
+from collections import Counter
 from pathlib import Path
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 import pytesseract
@@ -443,6 +444,122 @@ def _normalize_door_swing_for_tracker(value: str) -> str:
     return text
 
 
+def _orepac_label_value(block: str, label: str) -> str:
+    """Orepac 'Details Report' specs are printed as 'Label\\n Value' pairs."""
+    match = re.search(rf"(?im)^\s*{re.escape(label)}\s*\n\s*([^\n]+?)\s*$", block)
+    if not match:
+        return ""
+    value = match.group(1).strip()
+    # Guard against grabbing the NEXT label when a value line is blank.
+    if re.fullmatch(r"[A-Z][A-Za-z /]+", value) and len(value.split()) <= 4 and value.endswith(('Type', 'Prep', 'Width', 'Style', 'Finish', 'Shape', 'Species', 'Slot', 'Door')):
+        return ""
+    return value
+
+
+def _enrich_orepac_line_item_from_text(item: dict, block: str) -> dict:
+    """Fill in the door-detail fields Orepac prints as labelled specs but the
+    OCR tool / basic parser miss (material, texture, glass, bore, sill, hinge
+    finish, finish type, stain color, jamb, door location, ...)."""
+    low = block.lower()
+
+    # The quote's Product Type wins over any hardcoded default.
+    if 'exterior door' in low:
+        item['door_location'] = 'Exterior'
+    elif 'interior door' in low and not item.get('door_location'):
+        item['door_location'] = 'Interior'
+
+    def setdefault(key, value):
+        value = str(value or '').strip()
+        if value and not item.get(key):
+            item[key] = value
+
+    setdefault('material', _orepac_label_value(block, 'Material'))
+    setdefault('door_texture', _orepac_label_value(block, 'Door Texture'))
+
+    thickness = _orepac_label_value(block, 'Door Thickness')
+    if thickness and not item.get('thickness'):
+        item['thickness'] = thickness
+    if item.get('thickness'):  # "1 3/4\"" -> "1-3/4\"" to match the dropdown
+        item['thickness'] = re.sub(r'^(\d)\s+(\d/\d)', r'\1-\2', str(item['thickness']).strip())
+
+    category = (_orepac_label_value(block, 'Door Category') + ' '
+               + _orepac_label_value(block, 'Glass Collection')).lower()
+    if 'clear' in category:
+        setdefault('glass_tint', 'Clear')
+    elif 'obscure' in category or 'privacy' in category:
+        setdefault('glass_tint', 'Obscure')
+    elif 'low-e' in category or 'low e' in category:
+        setdefault('glass_tint', 'Low-E')
+
+    setdefault('door_glass_shape', _orepac_label_value(block, 'Glass Shape'))
+    lite = re.search(r'(\d+)\s*Lite', _orepac_label_value(block, 'Glass Name'))
+    if lite:
+        setdefault('door_glass_lite_style', f'{lite.group(1)} Lite')
+
+    door_style = _orepac_label_value(block, 'Door Style')
+    panel = re.search(r'(\d+)\s*Panel', door_style)
+    if panel:
+        setdefault('panel_style', f'{panel.group(1)} Panel')
+
+    style_combo = (door_style + ' ' + (item.get('door_texture') or '')).lower()
+    if 'shaker' in style_combo:
+        setdefault('sticking', 'Shaker')
+    elif 'ovolo' in style_combo:
+        setdefault('sticking', 'Ovolo')
+    elif re.search(r'craftsman|flat|flush|square', style_combo):
+        setdefault('sticking', 'Square')
+
+    if re.search(r'prefinish|finishkote', low) or _orepac_label_value(block, 'Door Frame Prefinished'):
+        setdefault('finish_type', 'Prefinished')
+    elif re.search(r'\bprimed\b', low):
+        setdefault('finish_type', 'Primed')
+    stain = _orepac_label_value(block, 'Stain Door')
+    if stain and not re.fullmatch(r'(?:one|two|three)\s+colors?', stain, re.IGNORECASE):
+        setdefault('finish_stain_color', stain)
+
+    bore = (item.get('boring') or _orepac_label_value(block, 'Door Bore') or '').lower()
+    if 'double' in bore:
+        item['boring'] = 'Double'
+    elif 'single' in bore:
+        item['boring'] = 'Single'
+    elif 'no bore' in bore or bore == 'none':
+        item['boring'] = 'None'
+
+    hinge_finish = _orepac_label_value(block, 'Hinge Finish')
+    if hinge_finish:
+        setdefault('hinge_finish', re.sub(r'\s*\([^)]*\)\s*$', '', hinge_finish).strip())
+    hinge_size = re.search(r'(\d(?:[- ]\d/\d)?)"?\s*(?:x\s*\d)?\s*(?:Ball|Plain|Bearing)?\s*Hinge', block, re.IGNORECASE)
+    setdefault('exterior_trim', _orepac_label_value(block, 'Exterior Trim'))
+    setdefault('sill', _orepac_label_value(block, 'Sill'))
+
+    jamb_width = _orepac_label_value(block, 'Jamb Width')
+    if jamb_width:
+        if jamb_width.lower() == 'custom':
+            custom = _orepac_label_value(block, 'Custom Jamb')
+            if not custom:
+                cm = re.search(r'Custom Jamb(?:\s+Width)?\s*[:\s]\s*([\d ]+\d/\d+)"?', block)
+                custom = cm.group(1).strip() if cm else ''
+            item['jamb_size'] = f'Custom {custom}'.strip() if custom else 'Custom'
+        elif not item.get('jamb_size') or item['jamb_size'].lower() == 'custom':
+            item['jamb_size'] = _normalize_jamb_size_for_web(jamb_width)
+
+    lock_system = _orepac_label_value(block, 'Lock System Type').lower()
+    if 'prep only' in lock_system or 'no hardware' in lock_system:
+        setdefault('hardware_option', 'Standard')
+
+    return item
+
+
+def _split_orepac_item_blocks(text: str, count: int) -> list[str]:
+    """Return `count` text chunks, one carrying each door's labelled spec block.
+    Orepac prints the specs just BEFORE the '  Item N' marker."""
+    parts = re.split(r'(?im)^\s*Item\s+(\d+)\s*$', text)
+    chunks = parts[0::2]  # drop the captured numbers
+    if len(chunks) >= count:
+        return chunks[:count]
+    return [text] * count
+
+
 def _map_desktop_line_item_to_web(item: dict, vendor: str, product_type: str) -> dict:
     item = item if isinstance(item, dict) else {}
     vendor_name = 'Orepac' if vendor.lower().startswith('ore') else vendor
@@ -519,7 +636,8 @@ def _map_desktop_line_item_to_web(item: dict, vendor: str, product_type: str) ->
         mapped['product'] = 'Door'
         mapped['type'] = 'door'
         mapped['door_count'] = mapped.get('door_count') or 'Single'
-        mapped['door_location'] = mapped.get('door_location') or 'Interior'
+        # door_location is filled by _enrich_orepac_line_item_from_text from the
+        # quote's "Product Type" (Exterior/Interior Doors).
         if item.get('door_configuration'):
             mapped['style'] = item.get('door_configuration')
             mapped['config'] = item.get('door_configuration')
@@ -546,7 +664,9 @@ def _desktop_vendor_data_to_order(data: dict, source_label: str, raw_text: str =
         if header_phone:
             phone = header_phone
     if customer_name:
-        customer_name = re.sub(r'\s+\d{3}[-\s]?\d{3}[-\s]*$', '', customer_name).strip()
+        # Strip a trailing phone number - full or partially OCR'd ("831-332-0345",
+        # "831-332", "831-") - that leaked into the name field.
+        customer_name = re.sub(r'\s+\d{3}[-\s]?(?:\d{2,4}[-\s]*)?$', '', customer_name).strip()
     product_type = _first_nonempty(data.get('product_type'), 'window' if vendor_lc == 'milgard' else 'door')
 
     raw_items = []
@@ -561,6 +681,14 @@ def _desktop_vendor_data_to_order(data: dict, source_label: str, raw_text: str =
     raw_items = _dedupe_desktop_line_items(raw_items)
     line_items = [_map_desktop_line_item_to_web(item, 'Orepac' if vendor_lc == 'orepac' else vendor, product_type) for item in raw_items]
     line_items = [item for item in line_items if item]
+
+    # The OCR tool pulls only a handful of fields; scrape the rest of the door
+    # specs (texture, glass, sill, hinge finish, finish type, ...) straight from
+    # the labelled Orepac text.
+    if vendor_lc == 'orepac' and line_items and raw_text:
+        blocks = _split_orepac_item_blocks(raw_text, len(line_items))
+        for idx, mapped_item in enumerate(line_items):
+            _enrich_orepac_line_item_from_text(mapped_item, blocks[idx] if idx < len(blocks) else raw_text)
 
     notes = [f"Imported from {source_label} using desktop OCR extraction"]
     if data.get('document_type'):
@@ -598,6 +726,237 @@ def _extract_desktop_vendor_order(text: str, source_label: str = 'OCR document')
     except Exception as exc:
         logger.warning("Desktop vendor OCR extraction warning: %s", exc)
         return {}
+
+
+# --------------------------------------------------------------------------
+# Pella "Proposal - Detailed" quote (mirrors the Orepac / Milgard extractors)
+# --------------------------------------------------------------------------
+
+_PELLA_SERIES = (
+    'Impervia', 'Architect Series', 'Lifestyle Series', 'Reserve Traditional',
+    'Reserve Contemporary', 'Reserve', 'Encompass by Pella', 'Encompass',
+    '250 Series', '350 Series', 'Defender Series', 'Defender', 'ThermaStar by Pella',
+    'ThermaStar', 'Hurricane Shield Series',
+)
+_PELLA_SERIES_RE = re.compile(
+    r'^(?:' + '|'.join(re.escape(s) for s in _PELLA_SERIES) + r')\s*,', re.IGNORECASE
+)
+
+
+def _pella_wrap_jamb(window_text: str) -> str:
+    wrap = _extract_first(r'Wrapping Information:\s*([^\n]+(?:\n[^\n]+)?)', window_text)
+    match = re.search(r'\b(\d+)[- ](\d+/\d+)"', wrap or '')
+    return f"{match.group(1)} {match.group(2)}" if match else ''
+
+
+def _extract_pella_items(text: str) -> list[dict]:
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    items: list[dict] = []
+
+    for index, line in enumerate(lines):
+        if not _PELLA_SERIES_RE.search(line.strip()):
+            continue
+        desc = line.strip()
+
+        # Look back a few lines for the rough opening and the quantity.
+        rough = ''
+        quantity = 1
+        for back in reversed(lines[max(0, index - 8):index]):
+            token = back.strip()
+            if not rough:
+                ro = re.match(r'^(\d+(?:\s+\d+/\d+)?)"?\s*[Xx]\s*(\d+(?:\s+\d+/\d+)?)"?$', token)
+                if ro:
+                    rough = f'{ro.group(1)} x {ro.group(2)}'
+                    continue
+            if quantity == 1 and re.fullmatch(r'\d{1,3}', token):
+                quantity = int(token)
+
+        window_text = '\n'.join(lines[index:index + 24])
+
+        # Item price is the first $ amount after the description. On some page
+        # layouts only the unit price is on that line; on others the extended
+        # price follows - take the first, which is always the unit price.
+        price = ''
+        price_match = re.search(r'\$\s*([\d,]+\.\d{2})', window_text)
+        if price_match:
+            price = price_match.group(1).replace(',', '')
+
+        callout = ''
+        style_line = ''
+        cfg_match = re.search(r'(?m)^\s*\d+:\s*(\d{3,4})\s+(.+)$', window_text)
+        if cfg_match:
+            callout = cfg_match.group(1)
+            style_line = re.sub(r'\s+', ' ', cfg_match.group(2)).strip()
+
+        parts = [p.strip() for p in desc.split(',')]
+        series = parts[0] if parts else 'Pella'
+        win_type = parts[1] if len(parts) > 1 else ''
+        # Map Pella's window-type wording onto the tracker's Window Style options.
+        style_map = {
+            'sliding window': 'Sliding', 'sliding': 'Sliding',
+            'casement window': 'Casement', 'casement': 'Casement',
+            'awning window': 'Awning', 'awning': 'Awning',
+            'double hung window': 'Double Hung', 'double-hung window': 'Double Hung',
+            'single hung window': 'Single Hung', 'single-hung window': 'Single Hung',
+            'fixed window': 'Picture', 'picture window': 'Picture',
+            'bay window': 'Bay', 'bow window': 'Bow',
+        }
+        win_style = style_map.get(win_type.lower(), win_type)
+        operation = parts[2] if len(parts) > 2 else ''
+        net_size = ''
+        for part in parts[2:]:
+            if re.search(r'\d+(?:\.\d+)?\s*[Xx]\s*\d+', part):
+                net_size = re.sub(r'\s*[Xx]\s*', ' x ', part)
+        color = parts[-1] if parts else ''
+
+        ext_color = _extract_first(r'Exterior Color\s*/\s*Finish:\s*([^\n]+)', window_text) or color
+        int_color = _extract_first(r'Interior Color\s*/\s*Finish:\s*([^\n]+)', window_text) or color
+        frame_size = _extract_first(r'Frame Size:\s*([0-9/ ]+[Xx][0-9/ ]+)', window_text)
+        glass_line = _extract_first(r'Glass:\s*([^\n]+)', window_text)
+        glass = 'Low-E' if glass_line and re.search(r'low[-\s]?e', glass_line, re.IGNORECASE) else ''
+        argon = 'Argon' if glass_line and re.search(r'\bargon\b', glass_line, re.IGNORECASE) else ''
+        tempered = bool(glass_line and re.search(r'tempered', glass_line, re.IGNORECASE))
+
+        width = height = ''
+        size_match = re.match(r'^(\d+(?:\s+\d+/\d+)?)\s*x\s*(\d+(?:\s+\d+/\d+)?)$', rough)
+        if size_match:
+            width, height = size_match.group(1), size_match.group(2)
+
+        is_door = bool(re.search(r'\b(?:patio door|entry door|hinged|sliding door)\b', desc, re.IGNORECASE))
+
+        item = {
+            'product': 'Door' if is_door else 'Window',
+            'type': 'door' if is_door else 'window',
+            'quantity': quantity,
+            'vendor': 'Pella',
+            'price': price,
+            'series': series,
+            'model': callout,
+            'style': win_style or ('Door' if is_door else 'Window'),
+            'operation': operation,
+            'size_mode': 'rough_opening' if rough else 'callout',
+            'size': rough or net_size,
+            'callout_size': callout,
+            'width': width,
+            'height': height,
+            'exterior_color': ext_color,
+            'interior_color': int_color,
+            'color': color,
+            'glass': glass,
+            'argon': argon,
+            'tempered_glass': tempered,
+            'frame': 'Fiberglass',
+            'material': 'Fiberglass',
+            'jamb_size': _pella_wrap_jamb(window_text),
+            'fin_type': 'Nail Fin' if re.search(r'nail fin', window_text, re.IGNORECASE) else '',
+            'special_notes': re.sub(
+                r'\s+', ' ',
+                f'{desc}. {style_line}. Frame {frame_size}. {glass_line or ""}'.strip(' .'),
+            ),
+        }
+        items.append({key: value for key, value in item.items() if value not in (None, '', False)})
+
+    # The merged PyMuPDF + OCR text layer repeats each item; keep the richest
+    # copy per size code (or per description when there's no size code).
+    deduped: dict[str, dict] = {}
+    for item in items:
+        key = (item.get('callout_size') or item.get('model')
+               or item.get('special_notes', '')[:60]).lower()
+        prev = deduped.get(key)
+        if prev is None:
+            deduped[key] = item
+            continue
+        score = len(item) + (5 if item.get('price') else 0) + (3 if item.get('quantity', 1) != 1 else 0)
+        prev_score = len(prev) + (5 if prev.get('price') else 0) + (3 if prev.get('quantity', 1) != 1 else 0)
+        if score > prev_score:
+            merged = dict(prev)
+            merged.update({k: v for k, v in item.items() if v})
+            deduped[key] = merged
+        else:
+            for k, v in item.items():
+                if v and not prev.get(k):
+                    prev[k] = v
+    return list(deduped.values())
+
+
+def _extract_pella_quote_order(text: str, source_label: str = 'OCR document') -> dict:
+    lower_text = text.lower()
+    if 'pella' not in lower_text:
+        return {}
+    if 'proposal - detailed' not in lower_text and 'pella.com' not in lower_text:
+        return {}
+
+    quote_number = (
+        _extract_first(r'Project Name:\s*.+?\s+(\d{6,})\s+Quote Number', text)
+        or _extract_first(r'Quote Number:\s*\n?\s*(\d{6,})', text)
+        or _extract_first(r'(?m)^\s*(\d{7,9})\s*$', text)
+    )
+    # Running page header: "Project Name: Door and windows   Quote Number: 21268017".
+    # Avoid the stacked-label block on page 1 where "Project Name:" is immediately
+    # followed by the dealer name.
+    project_name = ''
+    for cand in re.findall(r'Project Name:\s+([A-Za-z][^\n]*?)\s{2,}(?:\d{6,}\s+)?Quote Number', text):
+        cand = re.sub(r'\s+', ' ', cand).strip(' :')
+        if cand and 'builders first source' not in cand.lower():
+            project_name = cand
+            break
+    if not project_name:
+        for cand in re.findall(r'(?m)^Project Name:\s*(.+)$', text):
+            cand = re.sub(r'\s+', ' ', cand).strip(' :')
+            if cand and 'builders first source' not in cand.lower() and not cand.isdigit():
+                project_name = cand
+                break
+
+    # "Quote Name: Heinz H 831-332-0345" - the value can sit on a mixed line.
+    name = phone = ''
+    name_match = re.search(
+        r'([A-Z][a-z]+(?:\s+[A-Z][a-zA-Z.]*){0,3})\s+(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})',
+        text[:3000],
+    )
+    if name_match:
+        name = re.sub(r'\s+', ' ', name_match.group(1)).strip()
+        digits = re.sub(r'\D', '', name_match.group(2))
+        if len(digits) >= 10:
+            digits = digits[-10:]
+            phone = f'{digits[0:3]}-{digits[3:6]}-{digits[6:10]}'
+    if project_name and name and name.lower().startswith(project_name.lower()):
+        name = name[len(project_name):].strip()
+
+    # Quoted date = the M/D/YYYY that isn't the (repeated on every page) print date.
+    dates = re.findall(r'\b(\d{1,2}/\d{1,2}/\d{4})\b', text)
+    quote_date = ''
+    if dates:
+        print_date = Counter(dates).most_common(1)[0][0]
+        quote_date = _normalize_us_date(next((d for d in dates if d != print_date), ''))
+
+    total = _money_to_float(_extract_money_after_label(text, 'Amount Due')) \
+        or _money_to_float(_extract_money_after_label(text, 'Total'))
+    if total is None:
+        moneys = [_money_to_float(m) for m in re.findall(r'\$([\d,]+\.\d{2})', text)]
+        moneys = [m for m in moneys if m]
+        total = max(moneys) if moneys else None
+
+    items = _extract_pella_items(text)
+    has_window = any(i.get('type') == 'window' for i in items)
+    has_door = any(i.get('type') == 'door' for i in items)
+    product_type = 'window + door' if has_window and has_door else ('door' if has_door else 'window')
+
+    order = {
+        'customer_name': name or 'Imported Pella Quote',
+        'project_name': project_name or name or 'Pella Quote',
+        'stage': 'QUOTE_CREATED',
+        'customer_phone': phone,
+        'customer_email': '',
+        'product_type': product_type,
+        'vendor': 'Pella',
+        'quote_number': quote_number,
+        'quote_date': quote_date,
+        'quote_total': total,
+        'notes': f'Imported from {source_label} via OCR (Pella quote)',
+    }
+    if items:
+        order['line_items'] = json.dumps(items)
+    return {key: value for key, value in order.items() if value not in (None, '')}
 
 
 def _extract_milgard_quote_order(text: str, source_label: str = 'OCR document') -> dict:
@@ -785,6 +1144,10 @@ def process_ocr_text(all_text: str, source_label: str = 'OCR document') -> dict:
     if milgard_quote_order:
         return {'orders': [milgard_quote_order]}
 
+    pella_quote_order = _extract_pella_quote_order(all_text, source_label)
+    if pella_quote_order:
+        return {'orders': [pella_quote_order]}
+
     desktop_vendor_order = _extract_desktop_vendor_order(all_text, source_label)
     if desktop_vendor_order:
         return {'orders': [desktop_vendor_order]}
@@ -922,6 +1285,9 @@ def process_bulk_form_pdf(pdf_path: str) -> dict:
         milgard_fallback = _extract_milgard_quote_order(all_text, 'PDF file')
         if milgard_fallback:
             return {'orders': [milgard_fallback]}
+        pella_fallback = _extract_pella_quote_order(all_text, 'PDF file')
+        if pella_fallback:
+            return {'orders': [pella_fallback]}
         fallback = _extract_quote_style_order(all_text)
         if fallback:
             return {'orders': [fallback]}
@@ -1051,18 +1417,39 @@ def _extract_money_after_label(text: str, label: str) -> str:
 
 
 def _extract_orepac_header_customer(lines: list[str]) -> tuple[str, str]:
+    skip = re.compile(
+        r"customer|signature|printed name|sidemark|quote|date|ship-to|"
+        r"salesperson|report|page\s+\d|valid through",
+        re.I,
+    )
     for index, line in enumerate(lines[:20]):
-        if re.search(r"[A-Za-z]", line) and re.search(r"\d{3}[-\s]?\d{3}", line):
-            name_part = re.sub(r"\s*\d.*$", "", line).strip()
-            phone_parts = [line]
-            if index + 1 < len(lines):
-                phone_parts.append(lines[index + 1])
-            digits = re.sub(r"\D", "", " ".join(phone_parts))
-            phone = ""
-            if len(digits) >= 10:
-                digits = digits[-10:]
-                phone = f"{digits[0:3]}-{digits[3:6]}-{digits[6:10]}"
-            return name_part, phone
+        # Header customer line looks like "Heinz Hormedinger 831-332-0345" -
+        # at least two name words followed by a phone number.
+        if not re.search(r"[A-Za-z]{2,}\s+[A-Za-z]", line):
+            continue
+        if skip.search(line):
+            continue
+        if not re.search(r"\d{3}", line):
+            continue
+
+        name_part = re.sub(r"\s*\d.*$", "", line).strip().rstrip("-").strip()
+        if not name_part:
+            continue
+
+        line_digits = re.sub(r"\D", "", line)
+        if len(line_digits) >= 10:
+            digits = line_digits[:10]
+        elif re.search(r"[\d-]\s*$", line):
+            # OrePac's PDF text layer wraps the phone number onto the next
+            # line ("Heinz Hormedinger 831-" / "332-0345"). Only stitch the
+            # next line on when this one actually ends mid-number.
+            next_line = lines[index + 1] if index + 1 < len(lines) else ""
+            digits = re.sub(r"\D", "", f"{line} {next_line}")[:10]
+        else:
+            digits = line_digits
+
+        phone = f"{digits[0:3]}-{digits[3:6]}-{digits[6:10]}" if len(digits) >= 10 else ""
+        return name_part, phone
     return "", ""
 
 
@@ -1166,6 +1553,11 @@ def _extract_orepac_details_order(text: str, source_label: str = 'OCR document')
     ship_to = _line_after_label(lines, 'Ship-To Location')
     salesperson = _line_after_label(lines, 'Salesperson')
     items = _extract_orepac_items(text)
+    if items:
+        blocks = _split_orepac_item_blocks(text, len(items))
+        for idx, spec_item in enumerate(items):
+            spec_item['type'] = 'door'
+            _enrich_orepac_line_item_from_text(spec_item, blocks[idx] if idx < len(blocks) else text)
 
     if not customer_name:
         customer_name = customer_account or 'Unknown Customer'

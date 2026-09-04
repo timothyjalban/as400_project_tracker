@@ -34,8 +34,8 @@ sys.path.insert(0, str(_REPO_DIR))                 # so `from data.vendors` reso
 sys.path.insert(0, str(_REPO_DIR / "automation"))  # so `import launch_ibm` resolves
 
 try:
-    from launch_ibm import launch_ibm_with_details
-    logger.info("Imported launch_ibm_with_details from automation/")
+    from launch_ibm import launch_ibm_with_details, append_delivery_line
+    logger.info("Imported launch_ibm_with_details + append_delivery_line from automation/")
 except ImportError as e:
     logger.error("Failed to import automation/launch_ibm.py: %s", e)
     sys.exit(1)
@@ -699,6 +699,73 @@ def launch_special_order():
             'error': str(e)
         }), 500
 
+
+@app.route('/api/launch-delivery-quote', methods=['POST'])
+def launch_delivery_quote():
+    """Create a standalone AS400 quote that contains only the delivery line.
+
+    Used when delivery was missed on the original quote - a separate ticket.
+    """
+    try:
+        data = request.get_json() or {}
+        customer = (data.get('customer_name') or '').strip()
+        phone = (data.get('customer_phone') or '').strip()
+        if not customer or not phone:
+            return jsonify({'success': False, 'error': 'Customer name and phone are required'}), 400
+
+        customer_number = (data.get('customer_number') or '').strip()
+        has_account = bool(data.get('has_customer_account', False)) and _is_real_account_number(customer_number)
+        # Ctrl+Alt+D is self-contained - the macro types SKU 040619 / qty 1 /
+        # price $125 itself, so this line just needs the is_delivery marker.
+        delivery_item = {'is_delivery': True, 'no_cost': False, 'as400_comment_authoritative': True, 'notes': ''}
+        _trace('launch-delivery-quote', order_id=data.get('order_id'))
+
+        class CancelledFlag:
+            value = False
+            def __bool__(self):
+                return self.value
+
+        result = launch_ibm_with_details(
+            customer=customer,
+            phone=phone,
+            job_name=(data.get('project_name') or '').strip(),
+            quote_number=(data.get('quote_number') or '').strip(),
+            size='', jamb='', color='',
+            script='quote',
+            cancelled=bool(CancelledFlag()),
+            location='Felton',
+            customer_number=customer_number,
+            has_account=has_account,
+            line_items=[delivery_item],
+            vendor_sku='040619',
+        )
+        captured_quote = None
+        if isinstance(result, dict):
+            captured_quote = str(result.get('quote_number') or '').strip() or None
+        return jsonify({
+            'success': True,
+            'message': f'AS400 delivery quote launched for {customer}',
+            'captured_quote_number': captured_quote,
+        })
+    except Exception as e:
+        logger.error(f"Error launching delivery quote: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/add-delivery', methods=['POST'])
+def add_delivery():
+    """Add ONE delivery line (Ctrl+Alt+D) to the quote/order already open on
+    screen - "add delivery at the very end after all the items"."""
+    try:
+        data = request.get_json() or {}
+        _trace('add-delivery', order_id=data.get('order_id'))
+        append_delivery_line()
+        return jsonify({'success': True, 'message': 'Delivery line added via Ctrl+Alt+D'})
+    except Exception as e:
+        logger.error(f"Error adding delivery line: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # Endpoint to open an existing quote
 @app.route('/api/open-quote', methods=['POST'])
 def open_quote():
@@ -829,7 +896,7 @@ if __name__ == '__main__':
     print("=" * 70)
     print("Order Tracker Desktop Helper Service")
     print("=" * 70)
-    print(f"Desktop App Path: {DESKTOP_APP_PATH}")
+    print(f"Automation Path: {_REPO_DIR / 'automation'}")
     print(f"Starting service on http://localhost:5001")
     print(f"Web app should be running on http://localhost:5000")
     print()

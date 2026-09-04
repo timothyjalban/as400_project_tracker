@@ -5,12 +5,25 @@ function normalizeCommentLineText(text) {
     return String(text || '').replace(/\s+/g, ' ').trim();
 }
 
+// Per-option AS400 text override from the Line-Item Fields config (field-config.js).
+// Returns the configured string, or '' when there is no override / the config
+// module isn't loaded (harness) - callers then fall through to their own logic.
+// `item` (or an explicit vendor string) makes the lookup vendor-aware.
+function optAs400(key, value, scope, itemOrVendor) {
+    if (typeof optionAs400Text !== 'function') return '';
+    const vendor = (itemOrVendor && typeof itemOrVendor === 'object')
+        ? itemOrVendor.vendor : itemOrVendor;
+    return optionAs400Text(key, value, scope, vendor) || '';
+}
+
 // A door's lite count now lives in Panel Style (e.g. "3 Lite") -- the old
 // standalone Lites/Glass field was dropped from the door editor as a
 // redundant, independently-editable duplicate of the same value. Falls
 // back to the legacy item.glass value (e.g. "3 LT") for older orders saved
 // before Panel Style existed.
 function doorLitesText(item) {
+    const override = optAs400('panel_style', item.panel_style, 'door', item);
+    if (override) return override;
     const panelStyleMatch = /^(\d+)\s*Lite$/i.exec(String(item.panel_style || '').trim());
     if (panelStyleMatch) return `${panelStyleMatch[1]} LT`;
     return item.glass || '';
@@ -280,6 +293,8 @@ function windowSizeText(item) {
 function windowHandingText(item) {
     const raw = normalizeMacroText(macroItemValue(item, 'operation', 'operation_style', 'handing', 'swing'));
     if (!raw) return '';
+    const override = optAs400('operation', raw, 'window', item);
+    if (override) return override;
     const lowered = raw.toLowerCase();
     if (lowered === 'single hung') return 'SH';
     if (lowered === 'double hung') return 'DH';
@@ -423,6 +438,8 @@ function seriesDescriptionText(item) {
 function doorCoreDescriptionText(item) {
     const raw = normalizeMacroText(macroItemValue(item, 'core', 'core_type', 'slab_core'));
     if (!raw) return '';
+    const override = optAs400('core', raw, 'door', item);
+    if (override) return override;
     const lowered = raw.toLowerCase();
     if (['hc', 'hollow', 'hollow core', 'hollowcore'].includes(lowered)) return 'HC';
     if (['sc', 'solid', 'solid core', 'solidcore'].includes(lowered)) return 'SC';
@@ -430,7 +447,10 @@ function doorCoreDescriptionText(item) {
 }
 
 function doorMaterialDescriptionText(item) {
-    const material = abbreviateDescriptionTerms(normalizeMacroText(macroItemValue(item, 'prm_df', 'species', 'finish', 'material')));
+    const rawMaterial = normalizeMacroText(macroItemValue(item, 'prm_df', 'species', 'finish', 'material'));
+    const override = optAs400('material', rawMaterial, item.type || 'door', item);
+    if (override) return override;
+    const material = abbreviateDescriptionTerms(rawMaterial);
     if (!material) return '';
     const lowered = material.toLowerCase();
     if (['primed', 'painted', 'prime', 'paint', 'prm'].includes(lowered)) return 'PRM';
@@ -445,13 +465,18 @@ function doorStyleDescriptionText(item) {
     if (!raw) return '';
     if (isBypassDoorDescription(item)) return '';
     if (isHardwareOnlyStyleForDoor(item, raw)) return '';
+    const override = optAs400('style', macroItemValue(item, 'style'), 'door', item);
+    if (override) return override;
     const cleaned = stripPrehungWords(raw);
     if (cleaned.toLowerCase() === 'slab') return 'SLB';
     return cleaned.toUpperCase();
 }
 
 function doorStickingDescriptionText(item) {
-    const sticking = abbreviateDescriptionTerms(normalizeMacroText(macroItemValue(item, 'sticking', 'profile', 'sticking_profile')));
+    const rawSticking = normalizeMacroText(macroItemValue(item, 'sticking', 'profile', 'sticking_profile'));
+    const override = optAs400('sticking', rawSticking, 'door', item);
+    if (override) return override;
+    const sticking = abbreviateDescriptionTerms(rawSticking);
     if (!sticking) return '';
     return sticking.toUpperCase();
 }
@@ -675,14 +700,14 @@ function buildStandardAs400CommentPreview(item) {
 
         const doorVendor = prefs.vendor ? normalizeMacroText(item.vendor) : '';
         const doorSeries = prefs.series ? normalizeMacroText(item.series || item.model) : '';
-        const doorStyle = prefs.style ? normalizeMacroText(item.style) : '';
+        const doorStyle = prefs.style ? (optAs400('style', item.style, 'door', item) || normalizeMacroText(item.style)) : '';
         const doorMaterial = prefs.material ? normalizeMacroText(item.material) : '';
         const doorColorText = prefs.color ? windowColorCommentText(item) : '';
         const catalogParts = [doorVendor, doorSeries, doorStyle, doorMaterial, doorColorText].filter(Boolean);
         if (catalogParts.length > 0) parts.push(catalogParts.join(' | '));
 
-        const jambSize = normalizeMacroText(item.jamb_size);
-        const swing = normalizeMacroText(item.swing || item.prefit_swing);
+        const jambSize = optAs400('jamb_size', item.jamb_size, 'door', item) || normalizeMacroText(item.jamb_size);
+        const swing = optAs400('swing', item.swing || item.prefit_swing, 'door', item) || normalizeMacroText(item.swing || item.prefit_swing);
         const lites = normalizeMacroText(doorLitesText(item));
         const slabs = cleanOptionalText(item.bom_door_slabs);
         const mods = cleanOptionalText(item.bom_modifiers);
@@ -733,7 +758,7 @@ function buildStandardAs400CommentPreview(item) {
         const slabsToken = slabs ? `SLABS: ${slabs}` : '';
         const swingToken = prefs.swing && swing ? `SWING: ${swing}` : '';
         const jambToken = prefs.jamb && jambSize ? `JAMB: ${jambSize}` : '';
-        const sideliteToken = item.sidelites ? `SL: ${item.sidelites}` : '';
+        const sideliteToken = item.sidelites ? `SL: ${optAs400('sidelites', item.sidelites, 'door', item) || item.sidelites}` : '';
         const transomToken = item.transom === true || item.transom === 'Yes' ? 'TRANSOM' : '';
 
         const firstLine = [

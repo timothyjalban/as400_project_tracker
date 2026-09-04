@@ -82,6 +82,22 @@ SALESMAN_NUMBERS = {
 PREFIT_LABOR_SKU_1_3_8 = "663761"
 PREFIT_LABOR_SKU_1_3_4 = "663762"
 PREFIT_LABOR_RATE = 50.00
+
+# Delivery line: Ctrl+Alt+D is a self-contained AS400 macro - it types the
+# delivery SKU (040619) / qty (1) / price ($125) on its own, no dialog to fill.
+# These are kept for display/reference (web app manual-mode message).
+DELIVERY_LINE_SKU = "040619"
+DELIVERY_LINE_DESCRIPTION = "DELIVERY"
+DELIVERY_LINE_UM = "EA"
+DELIVERY_LINE_PRICE = "125"
+DELIVERY_LINE_QTY = "1"
+
+
+def _delivery_line_item(overrides: dict | None = None) -> dict:
+    """A marker line item so run_vendor_sku_macro_dialog fires Ctrl+Alt+D."""
+    return {"is_delivery": True, "no_cost": False, "as400_comment_authoritative": True, "notes": ""}
+
+
 AS400_DESCRIPTION_MAX_CHARS = 36
 INVALID_VENDOR_SKUS = {"1001", "1002", "1003", "2001", "2002", "2003"}
 
@@ -1764,6 +1780,10 @@ def run_vendor_sku_macro_dialog(
         price_text = _macro_price_text(item)
         quantity_text = _macro_quantity_text(item)
 
+        # Delivery line: Ctrl+Alt+D is self-contained (the macro types the
+        # SKU / qty / price itself), so there are no dialog fields to resolve.
+        is_delivery_item = bool(item.get("is_delivery"))
+
         # Step 1: when enabled, the web app's row plan is authoritative for the
         # five Ctrl+Alt+S dialog fields. Comments still flow via the existing
         # as400_comment_authoritative path below.
@@ -1809,6 +1829,14 @@ def run_vendor_sku_macro_dialog(
                 max_fields=6,
                 allow_post_f9_cleanup=True,
             )
+
+        # Delivery: Ctrl+Alt+D is the WHOLE action - the AS400 macro enters the
+        # delivery SKU / qty / price itself; there is no dialog to fill.
+        if is_delivery_item:
+            print(f">>> [KEYSTROKE] Delivery line {item_index}/{len(items_to_process)}: pressing Ctrl+Alt+D (macro fills SKU/qty/price)...")
+            pyautogui.hotkey("ctrl", "alt", "d")
+            time.sleep(float(os.environ.get("AS400_DELIVERY_SETTLE", "2") or "2"))
+            continue
 
         macro_hotkey = "n" if bool(item.get("no_cost")) else "s"
         print(
@@ -2004,6 +2032,19 @@ def run_quote_line_items(line_items: list[dict] | None, vendor_sku: str | int | 
         time.sleep(step_delay)
     return True
 
+def append_delivery_line(*_args, **_kwargs) -> bool:
+    """Focus the open AS400 emulator and add ONE delivery line via Ctrl+Alt+D.
+
+    For "add delivery at the very end" - the quote/order is already on screen at
+    the line-item entry field; nothing is logged in or navigated. Ctrl+Alt+D is
+    self-contained (types SKU 040619 / qty 1 / price $125 itself).
+    """
+    _focus_emulator_window()
+    time.sleep(0.5)
+    run_vendor_sku_macro_dialog(DELIVERY_LINE_SKU, line_items=[_delivery_line_item()])
+    return True
+
+
 def launch_ibm_with_details(customer: str, phone: str, job_name: str, quote_number: str,
                             size: str, jamb: str, color: str, script: str = "quote",
                             cancelled: bool = False, location: str = "Felton", session: str = "Session 1",
@@ -2137,7 +2178,17 @@ def launch_ibm_with_details(customer: str, phone: str, job_name: str, quote_numb
         run_open_charge_sale_keystrokes(quote_number)
     elif script == "open_special_order":
         run_open_special_order_keystrokes(quote_number)
-        
+    elif script == "delivery_line":
+        # Append a single delivery line (Ctrl+Alt+D) to whatever quote/order is
+        # already open on screen - no login, no customer header.
+        print(">>> Running delivery-line append (Ctrl+Alt+D)")
+        first = line_items[0] if isinstance(line_items, list) and line_items and isinstance(line_items[0], dict) else {}
+        run_vendor_sku_macro_dialog(
+            DELIVERY_LINE_SKU,
+            line_items=[_delivery_line_item(first)],
+        )
+        return True
+
 
 # Allow toggling PyAutoGUI failsafe via environment variable
 try:

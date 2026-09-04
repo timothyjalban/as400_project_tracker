@@ -840,6 +840,97 @@ async function createSpecialOrder(groupName = null) {
     }
 }
 
+// ===== Delivery line (Ctrl+Alt+D - a self-contained AS400 macro that types
+// SKU 040619 / qty 1 / price $125 by itself; no dialog to fill) =====
+
+const DELIVERY_LINE = { sku: '040619', price: 125, quantity: 1 };
+
+function _deliveryActionOrder() {
+    const actionOrder = getSelectedOrder() || (currentOrder && currentOrder.id ? currentOrder : null);
+    if (!actionOrder || !actionOrder.id) {
+        alert('No order selected');
+        return null;
+    }
+    const formData = selectedOrderId === actionOrder.id ? collectInlineOrderFormData() : {};
+    Object.assign(actionOrder, formData);
+    currentOrder = actionOrder;
+    return actionOrder;
+}
+
+// Button A: standalone AS400 quote that contains only the delivery line, for
+// when delivery was left off the original quote.
+async function createDeliveryTag() {
+    const actionOrder = _deliveryActionOrder();
+    if (!actionOrder) return;
+    const automationOrder = normalizeCustomerForAutomation(actionOrder);
+
+    if (!(await checkDesktopHelper())) {
+        alert(`Delivery Tag (Manual Mode)\n\nDesktop Helper not running.\n\n` +
+            `Create a new AS400 quote for ${automationOrder.customer_name}, then press Ctrl+Alt+D ` +
+            `to drop in the delivery line (SKU ${DELIVERY_LINE.sku}, $${DELIVERY_LINE.price}).`);
+        return;
+    }
+    if (!confirm(`Create a SEPARATE AS400 quote for ${automationOrder.customer_name} with just the $${DELIVERY_LINE.price} delivery line?`)) return;
+
+    try {
+        const result = await callDesktopHelper('launch-delivery-quote', {
+            method: 'POST',
+            payload: {
+                order_id: actionOrder.id,
+                customer_name: automationOrder.customer_name,
+                customer_phone: automationOrder.customer_phone,
+                customer_email: automationOrder.customer_email,
+                project_name: automationOrder.project_name,
+                quote_number: automationOrder.quote_number,
+                customer_number: automationOrder.customer_number,
+                has_customer_account: automationOrder.has_customer_account,
+            },
+        });
+        if (result.unauthorized) return;
+        if (result.success) {
+            let msg = `AS400 delivery quote launched for ${automationOrder.customer_name}`;
+            if (result.captured_quote_number) msg += `\nQuote Number: ${result.captured_quote_number}`;
+            showToast(msg);
+        } else {
+            showError(result.error || 'Failed to launch delivery quote');
+        }
+    } catch (error) {
+        console.error('Error launching delivery quote:', error);
+        showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
+    }
+}
+
+// Button B: add the delivery line to the quote/order already open in AS400,
+// after all the other items have been typed in.
+async function addDeliveryToQuote() {
+    const actionOrder = _deliveryActionOrder();
+    if (!actionOrder) return;
+
+    if (!(await checkDesktopHelper())) {
+        alert(`Add Delivery (Manual Mode)\n\nDesktop Helper not running.\n\n` +
+            `In the open AS400 quote, press Ctrl+Alt+D to drop in the delivery line ` +
+            `(SKU ${DELIVERY_LINE.sku}, $${DELIVERY_LINE.price}).`);
+        return;
+    }
+    if (!confirm(`Add the $${DELIVERY_LINE.price} delivery line to the AS400 quote that's open now?\n\nMake sure the quote is on screen at the item-entry field.`)) return;
+
+    try {
+        const result = await callDesktopHelper('add-delivery', {
+            method: 'POST',
+            payload: { order_id: actionOrder.id },
+        });
+        if (result.unauthorized) return;
+        if (result.success) {
+            showToast(`Delivery line added ($${DELIVERY_LINE.price})`);
+        } else {
+            showError(result.error || 'Failed to add delivery line');
+        }
+    } catch (error) {
+        console.error('Error adding delivery line:', error);
+        showError('Desktop helper service error. Make sure desktop_helper_service.py is running.');
+    }
+}
+
 // ===== Open Existing Quote/Invoice/Special Order Functions =====
 
 function resolveOpenActionTarget(order, preferredAction = null) {

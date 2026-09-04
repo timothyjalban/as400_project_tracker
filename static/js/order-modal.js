@@ -147,35 +147,24 @@ async function saveInlineOrder() {
         return;
     }
 
-    try {
-        const response = await fetch(`${API_BASE}/orders/${selectedOrderId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
+    const { ok, status, result } = await putOrder(selectedOrderId, data, { source: 'inline-form' });
 
-        const result = await response.json();
-
-        if (!result.success) {
+    if (!ok) {
+        if (status !== 409 && status !== 0) {
             showError(result.error || 'Failed to save order');
-            return;
         }
-
-        if (Object.prototype.hasOwnProperty.call(data, 'line_items')) {
-            resetLineItemsDirty(data.line_items);
-        }
-        if (result.order) {
-            applyUpdatedOrderLocally(result.order);
-            refreshOrderListAndProcess();
-        }
-        showSaveConfirmation('Order updated');
-        hideError();
-    } catch (error) {
-        console.error('Error saving inline order:', error);
-        showError('Failed to save order');
+        return;
     }
+
+    if (Object.prototype.hasOwnProperty.call(data, 'line_items')) {
+        resetLineItemsDirty(data.line_items);
+    }
+    if (result.order) {
+        applyUpdatedOrderLocally(result.order);
+        refreshOrderListAndProcess();
+    }
+    showSaveConfirmation('Order updated');
+    hideError();
 }
 
 function formatStageLabel(stage) {
@@ -220,6 +209,10 @@ async function viewOrderDetails(orderId) {
 
 // Show order modal with data
 function showOrderModal(order) {
+    // Stamp the save guard with the order this form is being populated from
+    // (null for a brand-new order).
+    setOrderFormBase(order || null);
+
     // Set order ID in header (or "New Order" for create)
     const modalTitle = document.getElementById('modalOrderId');
     modalTitle.textContent = order ? order.id : 'New Order';
@@ -537,28 +530,32 @@ async function saveOrder() {
         
         // Determine if creating or updating
         const isCreate = !currentOrder;
-        const url = isCreate 
-            ? `${API_BASE}/orders` 
-            : `${API_BASE}/orders/${currentOrder.id}`;
-        const method = isCreate ? 'POST' : 'PUT';
         const lineItemsJson = isCreate ? getLineItemsJsonForSave() : getChangedLineItemsJson();
         if (isCreate || lineItemsJson !== undefined) {
             data.line_items = lineItemsJson;
         } else {
             delete data.line_items;
         }
-        
-        // Send request
-        const response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
+
+        let result;
+        if (isCreate) {
+            const response = await fetch(`${API_BASE}/orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            result = await response.json();
+        } else {
+            const outcome = await putOrder(currentOrder.id, data, { source: 'order-modal' });
+            if (!outcome.ok) {
+                if (outcome.status !== 409 && outcome.status !== 0) {
+                    showError(outcome.result.error || 'Failed to save order');
+                }
+                return;
+            }
+            result = outcome.result;
+        }
+
         if (result.success) {
             if (Object.prototype.hasOwnProperty.call(data, 'line_items')) {
                 resetLineItemsDirty(data.line_items);

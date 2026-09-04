@@ -1,0 +1,579 @@
+{
+  "labels": {
+    "door_location": "Door Location",
+    "material": "Material",
+    "door_texture": "Texture",
+    "core": "Core",
+    "sticking": "Sticking",
+    "glass_tint": "Glass Tint",
+    "door_frame_profile": "Lite Frame",
+    "finish_type": "Finish Type",
+    "panel_style": "Panel Style",
+    "boring": "Boring",
+    "hinge_size": "Hinge Size",
+    "hinge_finish": "Hinge Finish",
+    "exterior_trim": "Exterior Trim",
+    "hardware_option": "Hardware",
+    "thickness": "Thickness",
+    "swing": "Swing / Handing",
+    "frame": "Frame",
+    "glass": "Glass",
+    "hardware_handing": "Handing",
+    "hardware_backset": "Backset",
+    "hardware_bore": "Bore",
+    "door_count": "Door count",
+    "sidelites": "Sidelites",
+    "operation": "Operation",
+    "jamb_size": "Jamb size",
+    "prefit_bore_diameter": "Bore Diameter",
+    "hardware_lever_knob_style": "Lever / knob",
+    "style@door": "Door Style",
+    "door_glass_shape": "Lite Shape",
+    "door_glass_lite_style": "Lite Style",
+    "finish_wood_species": "Wood Species",
+    "finish_stain_color": "Stain Color",
+    "sill": "Sill"
+  },
+  "options": {
+    "door_location": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Interior"
+        },
+        {
+          "value": "Exterior"
+        }
+      ]
+    },
+    "material": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Wood"
+        },
+        {
+          "value": "Primed",
+          "as400_text": "PRM"
+        },
+        {
+          "value": "Fiberglass",
+          "as400_text": "FB"
+        },
+        {
+          "value": "Steel"
+        },
+        {
+          "value": "Vinyl"
+        }
+      ]
+    },
+    "door_texture": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Smooth-Star"
+        },
+        {
+          "value": "Classic Craft Fir Grain"
+        },
+        {
+          "value": "Classic Craft Mahogany Grain"
+        },
+        {
+          "value": "Classic Craft Canvas"
+        },
+        {
+          "value": "Fiber-Classic Oak Collection"
+        },
+        {
+          "value": "Fiber-Classic Mahogany Collection"
+        },
+        {
+          "value": "Traditions"
+        },
+        {
+          "value": "Profiles"
+        }
+      ]
+    },
+    "core": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Hollow Core",
+          "as400_text": "HC"
+        },
+        {
+          "value": "Solid Core",
+          "as400_text": "SC"
+        }
+      ]
+    },
+    "sticking": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Square"
+        },
+        {
+          "value": "Ovolo"
+        },
+        {
+          "value": "Shaker",
+          "as400_text": "SHK"
+        }
+      ]
+    },
+    "glass_tint": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Clear"
+        },
+        {
+          "value": "Obscure"
+        },
+        {
+          "value": "Low-E"
+        },
+        {
+          "value": "Tempered"
+        }
+      ]
+    },
+    "door_frame_profile": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Flat Lite Frame"
+        },
+        {
+          "value": "Scrolled Lite Frame"
+        }
+      ]
+    },
+    "finish_type": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Primed"
+        },
+        {
+          "value": "Unfinished"
+        },
+        {
+          "value": "Prefinished"
+        }
+      ]
+    },
+    "panel_style": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "1 Panel"
+        },
+        {
+          "value": "2 Panel"
+        },
+        {
+          "value": "3 Panel"
+        },
+        {
+          "value": "4 Panel"
+        },
+        {
+          "value": "5 Panel"
+        },
+        {
+          "value": "6 Panel"
+        },
+        {
+          "value": "1 Lite",
+          "as400_text": "1 LT"
+        },
+        {
+          "value": "2 Lite",
+          "as400_text": "2 LT"
+        },
+        {
+          "value": "3 Lite",
+          "as400_text": "3 LT"
+        },
+        {
+          "value": "5 Lite",
+          "as400_text": "5 LT"
+        },
+        {
+          "value": "10 Lite",
+          "as400_text": "10 LT"
+        },
+        {
+          "value": "15 Lite",
+          "as400_text": "15 LT"
+        },
+        {
+          "value": "Louver"
+        },
+        {
+          "value": "Plank"
+        }
+      ]
+    },
+    "boring": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Single"
+        },
+        {
+          "value": "Double"
+        },
+        {
+          "value": "None"
+        }
+      ]
+    },
+    "hinge_size": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "3\""
+        },
+        {
+          "value": "3-1/2\""
+        },
+        {
+          "value": "4\""
+        },
+        {
+          "value": "4-1/2\""
+        }
+      ]
+    },
+    "hinge_finish": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Satin Nickel"
+        },
+        {
+          "value": "Oil-Rubbed Bronze"
+        },
+        {
+          "value": "Bright Brass"
+        },
+        {
+          "value": "Polished Chrome"
+        },
+        {
+          "value": "Brushed Chrome"
+        },
+        {
+          "value": "Black"
+        }
+      ]
+    },
+    "exterior_trim": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Brickmould"
+        },
+        {
+          "value": "No Exterior Trim"
+        }
+      ]
+    },
+    "hardware_option": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Standard"
+        },
+        {
+          "value": "Lever"
+        },
+        {
+          "value": "Knob"
+        },
+        {
+          "value": "Deadbolt"
+        }
+      ]
+    },
+    "thickness": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "1-3/8\""
+        },
+        {
+          "value": "1-3/4\""
+        }
+      ]
+    },
+    "swing": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "RHIS"
+        },
+        {
+          "value": "RHOS"
+        },
+        {
+          "value": "LHIS"
+        },
+        {
+          "value": "LHOS"
+        }
+      ]
+    },
+    "frame": {
+      "scope": "window",
+      "items": [
+        {
+          "value": "Wood"
+        },
+        {
+          "value": "Fiberglass"
+        },
+        {
+          "value": "Aluminum"
+        },
+        {
+          "value": "Vinyl"
+        }
+      ]
+    },
+    "glass": {
+      "scope": "window",
+      "items": [
+        {
+          "value": "Clear"
+        },
+        {
+          "value": "Low-E"
+        },
+        {
+          "value": "Obscure"
+        }
+      ]
+    },
+    "hardware_handing": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "LH"
+        },
+        {
+          "value": "RH"
+        },
+        {
+          "value": "Reversible"
+        },
+        {
+          "value": "N/A"
+        }
+      ]
+    },
+    "hardware_backset": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "2-3/8\""
+        },
+        {
+          "value": "2-3/4\""
+        },
+        {
+          "value": "Adjustable"
+        }
+      ]
+    },
+    "hardware_bore": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Single Bore"
+        },
+        {
+          "value": "Double Bore"
+        },
+        {
+          "value": "Tubular Prep"
+        },
+        {
+          "value": "Mortise Prep"
+        },
+        {
+          "value": "N/A"
+        }
+      ]
+    },
+    "door_count": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "Single"
+        },
+        {
+          "value": "Double"
+        },
+        {
+          "value": "Triple"
+        }
+      ]
+    },
+    "sidelites": {
+      "scope": "*",
+      "items": [
+        {
+          "value": "1L"
+        },
+        {
+          "value": "1R"
+        },
+        {
+          "value": "2"
+        }
+      ]
+    },
+    "operation": {
+      "scope": "window",
+      "items": [
+        {
+          "value": "XO"
+        },
+        {
+          "value": "OX"
+        },
+        {
+          "value": "XOX"
+        }
+      ]
+    },
+    "jamb_size": {
+      "scope": "door",
+      "items": [
+        {
+          "value": "4 9/16"
+        },
+        {
+          "value": "6 9/16"
+        }
+      ]
+    },
+    "prefit_bore_diameter": {
+      "scope": "door",
+      "items": [
+        {
+          "value": "2 1/8\""
+        },
+        {
+          "value": "1 1/2\""
+        },
+        {
+          "value": "1 5/8\""
+        }
+      ]
+    },
+    "hardware_lever_knob_style": {
+      "scope": "*",
+      "items": []
+    },
+    "style": {
+      "scope": "door",
+      "items": [
+        { "value": "Slab" },
+        { "value": "Prehung" },
+        { "value": "French" },
+        { "value": "Patio" },
+        { "value": "Bifold" },
+        { "value": "Bypass" },
+        { "value": "Pocket" },
+        { "value": "Barn" }
+      ]
+    },
+    "door_glass_shape": {
+      "scope": "door",
+      "items": [
+        { "value": "Full Lite" },
+        { "value": "3/4 Lite" },
+        { "value": "1/2 Lite" },
+        { "value": "1/4 Lite" },
+        { "value": "Full Lite Rectangle" },
+        { "value": "Craftsman Rectangle" },
+        { "value": "Oval" },
+        { "value": "Prairie" },
+        { "value": "Camber Top" },
+        { "value": "None" }
+      ]
+    },
+    "door_glass_lite_style": {
+      "scope": "door",
+      "items": [
+        { "value": "1 Lite" },
+        { "value": "2 Lite" },
+        { "value": "4 Lite" },
+        { "value": "6 Lite" },
+        { "value": "9 Lite" },
+        { "value": "10 Lite" },
+        { "value": "12 Lite" },
+        { "value": "15 Lite" },
+        { "value": "6 Lite Colonial" },
+        { "value": "Prairie" },
+        { "value": "SDL" }
+      ]
+    },
+    "finish_wood_species": {
+      "scope": "door",
+      "items": [
+        { "value": "Pine" },
+        { "value": "Fir" },
+        { "value": "Douglas Fir" },
+        { "value": "Knotty Alder" },
+        { "value": "Alder" },
+        { "value": "Mahogany" },
+        { "value": "Oak" },
+        { "value": "Red Oak" },
+        { "value": "White Oak" },
+        { "value": "Maple" },
+        { "value": "Cherry" },
+        { "value": "Walnut" },
+        { "value": "Poplar" },
+        { "value": "MDF" },
+        { "value": "Primed" }
+      ]
+    },
+    "finish_stain_color": {
+      "scope": "door",
+      "items": [
+        { "value": "Natural" },
+        { "value": "Golden Oak" },
+        { "value": "Provincial" },
+        { "value": "Special Walnut" },
+        { "value": "Dark Walnut" },
+        { "value": "Espresso" },
+        { "value": "Ebony" },
+        { "value": "Honey" },
+        { "value": "Cherry" },
+        { "value": "White" },
+        { "value": "Black" }
+      ]
+    },
+    "sill": {
+      "scope": "door",
+      "items": [
+        { "value": "Aluminum" },
+        { "value": "Mill Aluminum" },
+        { "value": "Bronze" },
+        { "value": "Composite Adjustable" },
+        { "value": "Bronze Tru-D Composite Adjustable" },
+        { "value": "Oak" },
+        { "value": "None" }
+      ]
+    }
+  }
+}

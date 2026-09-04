@@ -270,6 +270,8 @@ def map_customer_line_item(raw):
             ('panel_style', 'panel_style'),
             ('finish_type', 'finish_type'),
             ('finish_detail', 'finish_detail'),
+            ('finish_wood_species', 'finish_wood_species'),
+            ('finish_stain_color', 'finish_stain_color'),
             ('glass_tint', 'glass_tint'),
             ('jamb_size', 'jamb_size'),
             ('boring', 'boring'),

@@ -149,6 +149,8 @@ from blueprints.notes import notes_bp
 app.register_blueprint(notes_bp)
 from blueprints.line_item_options import line_item_options_bp
 app.register_blueprint(line_item_options_bp)
+from blueprints.field_config import field_config_bp
+app.register_blueprint(field_config_bp)
 from blueprints.customers import customers_bp
 app.register_blueprint(customers_bp)
 from blueprints.documents import documents_bp

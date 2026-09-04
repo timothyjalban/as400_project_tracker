@@ -20,6 +20,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const FILES = [
   'static/js/app.js',
   'static/js/line-item-fields.js',
+  'static/js/field-config.js',
   'static/js/line-item-options.js',
   'static/js/line-item-groups.js',
   'static/js/line-item-geometry.js',
@@ -164,6 +165,35 @@ export function createBrowserContext() {
     '.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };',
     context,
   );
+
+  // field-config.js declares LINE_ITEM_FIELD_CONFIG as a top-level `let`. In the
+  // running app loadFieldConfig() fetches it; the harness has no network, so seed
+  // it from the committed factory defaults (the DB seed source) so managed
+  // dropdowns resolve their options exactly as production does after first run.
+  {
+    const defaults = JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'data/line_item_field_defaults.json'), 'utf8'),
+    );
+    const options = {};
+    for (const [key, spec] of Object.entries(defaults.options || {})) {
+      const scope = spec.scope || '*';
+      options[key] = (spec.items || []).map((opt, i) => ({
+        id: i + 1,
+        field_key: key,
+        scope,
+        vendor: opt.vendor || '',
+        value: opt.value,
+        label: opt.label || opt.value,
+        as400_text: opt.as400_text || null,
+        sort_order: i * 10,
+        active: opt.active === false ? false : true,
+      }));
+    }
+    // labels: {} - the server returns only user overrides here, not the seeded
+    // defaults, so fieldLabel() falls back to the registry label (unchanged).
+    sandbox.__fieldConfig = { options, labels: {} };
+    vm.runInContext('LINE_ITEM_FIELD_CONFIG = globalThis.__fieldConfig;', context);
+  }
 
   return {
     /** Set the "open order" state the preview builders read from. */

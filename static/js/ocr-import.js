@@ -212,14 +212,12 @@ async function applyPreviewedOCRToExistingOrder() {
         payload.stage = orderData.stage;
     }
 
-    const response = await fetch(`${API_BASE}/orders/${targetOrderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const { ok, result: saveResult } = await putOrder(targetOrderId, payload, {
+        source: 'ocr-import',
+        baseOrderId: targetOrderId,
     });
-    const saveResult = await response.json();
 
-    if (!saveResult.success || !saveResult.order) {
+    if (!ok || !saveResult.order) {
         throw new Error(saveResult.error || 'Parsed the file, but failed to update the order');
     }
 

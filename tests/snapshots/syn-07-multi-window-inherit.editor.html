@@ -11,6 +11,8 @@
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="quote" data-as400-group-name="Milgard">Create Quote</button>
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="invoice" data-as400-group-name="Milgard">Charge Sale</button>
 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="special-order" data-as400-group-name="Milgard">Special Order</button>
+<button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="add-delivery" data-as400-group-name="Milgard" title="Add the $125 delivery line (Ctrl+Alt+D) to the AS400 quote open on screen">Add Delivery</button>
+<button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="delivery-tag" data-as400-group-name="Milgard" title="Create a separate AS400 quote with only the $125 delivery line">Delivery Tag</button>
 </div>
 </div>
 <div class="line-item-card as400-group-card as400-group-slate" data-line-item-card="0" data-as400-group-card="Milgard">
@@ -77,16 +79,16 @@
 </select>
 </div>
 <div class="line-item-field">
-<label>Unit Price</label>
-<input type="number" min="0" step="0.01" value="468.80" data-item-index="0" data-item-field="price" placeholder="e.g. 499.99">
-</div>
-<div class="line-item-field">
 <label>Width</label>
 <input type="text" value="46" data-item-index="0" data-item-field="width" placeholder="e.g. 36&quot;">
 </div>
 <div class="line-item-field">
 <label>Height</label>
 <input type="text" value="24" data-item-index="0" data-item-field="height" placeholder="e.g. 80&quot;">
+</div>
+<div class="line-item-field">
+<label>Unit Price</label>
+<input type="number" min="0" step="0.01" value="468.80" data-item-index="0" data-item-field="price" placeholder="e.g. 499.99">
 </div>
 </div>
 <div class="line-item-options line-item-window-fields ">
@@ -107,12 +109,14 @@
 <label>Handing</label>
 <select data-item-index="0" data-item-field="operation">
 <option value="">Select handing</option>
+<option value="Slider" selected>Slider</option>
 <option value="XO" >XO</option>
 <option value="OX" >OX</option>
 <option value="XOX" >XOX</option>
-<option value="➕ Add New Handing" >➕ Add New Handing</option>
 </select>
-<button hidden type="button" class="item-add-style-button" data-add-handing="window">➕ Add Handing</button>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="operation" data-edit-field-scope="window"
+title="Edit Handing choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Fin Type</label>
@@ -133,6 +137,9 @@
 <option value="Aluminum" >Aluminum</option>
 <option value="Vinyl" >Vinyl</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="frame" data-edit-field-scope="window"
+title="Edit Frame choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Exterior Color</label>
@@ -158,6 +165,9 @@
 <option value="Low-E" selected>Low-E</option>
 <option value="Obscure" >Obscure</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="glass" data-edit-field-scope="window"
+title="Edit Glass choices">&#9998;</button>
 </div>
 <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
 <label class="checkbox-label">
@@ -258,16 +268,16 @@ Qty: 1</textarea>
 </select>
 </div>
 <div class="line-item-field">
-<label>Unit Price</label>
-<input type="number" min="0" step="0.01" value="468.80" data-item-index="1" data-item-field="price" placeholder="e.g. 499.99">
-</div>
-<div class="line-item-field">
 <label>Width</label>
 <input type="text" value="46" data-item-index="1" data-item-field="width" placeholder="e.g. 36&quot;">
 </div>
 <div class="line-item-field">
 <label>Height</label>
 <input type="text" value="24" data-item-index="1" data-item-field="height" placeholder="e.g. 80&quot;">
+</div>
+<div class="line-item-field">
+<label>Unit Price</label>
+<input type="number" min="0" step="0.01" value="468.80" data-item-index="1" data-item-field="price" placeholder="e.g. 499.99">
 </div>
 </div>
 <div class="line-item-options line-item-window-fields ">
@@ -288,12 +298,14 @@ Qty: 1</textarea>
 <label>Handing</label>
 <select data-item-index="1" data-item-field="operation">
 <option value="">Select handing</option>
+<option value="Slider" selected>Slider</option>
 <option value="XO" >XO</option>
 <option value="OX" >OX</option>
 <option value="XOX" >XOX</option>
-<option value="➕ Add New Handing" >➕ Add New Handing</option>
 </select>
-<button hidden type="button" class="item-add-style-button" data-add-handing="window">➕ Add Handing</button>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="operation" data-edit-field-scope="window"
+title="Edit Handing choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Fin Type</label>
@@ -314,6 +326,9 @@ Qty: 1</textarea>
 <option value="Aluminum" >Aluminum</option>
 <option value="Vinyl" >Vinyl</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="frame" data-edit-field-scope="window"
+title="Edit Frame choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Exterior Color</label>
@@ -339,6 +354,9 @@ Qty: 1</textarea>
 <option value="Low-E" selected>Low-E</option>
 <option value="Obscure" >Obscure</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="glass" data-edit-field-scope="window"
+title="Edit Glass choices">&#9998;</button>
 </div>
 <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
 <label class="checkbox-label">
@@ -436,16 +454,16 @@ Qty: 1</textarea>
 </select>
 </div>
 <div class="line-item-field">
-<label>Unit Price</label>
-<input type="number" min="0" step="0.01" value="392.10" data-item-index="2" data-item-field="price" placeholder="e.g. 499.99">
-</div>
-<div class="line-item-field">
 <label>Width</label>
 <input type="text" value="24" data-item-index="2" data-item-field="width" placeholder="e.g. 36&quot;">
 </div>
 <div class="line-item-field">
 <label>Height</label>
 <input type="text" value="36" data-item-index="2" data-item-field="height" placeholder="e.g. 80&quot;">
+</div>
+<div class="line-item-field">
+<label>Unit Price</label>
+<input type="number" min="0" step="0.01" value="392.10" data-item-index="2" data-item-field="price" placeholder="e.g. 499.99">
 </div>
 </div>
 <div class="line-item-options line-item-window-fields ">
@@ -466,12 +484,14 @@ Qty: 1</textarea>
 <label>Handing</label>
 <select data-item-index="2" data-item-field="operation">
 <option value="">Select handing</option>
+<option value="Single Hung" selected>Single Hung</option>
 <option value="XO" >XO</option>
 <option value="OX" >OX</option>
 <option value="XOX" >XOX</option>
-<option value="➕ Add New Handing" >➕ Add New Handing</option>
 </select>
-<button hidden type="button" class="item-add-style-button" data-add-handing="window">➕ Add Handing</button>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="operation" data-edit-field-scope="window"
+title="Edit Handing choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Fin Type</label>
@@ -492,6 +512,9 @@ Qty: 1</textarea>
 <option value="Aluminum" >Aluminum</option>
 <option value="Vinyl" >Vinyl</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="frame" data-edit-field-scope="window"
+title="Edit Frame choices">&#9998;</button>
 </div>
 <div class="line-item-field">
 <label>Exterior Color</label>
@@ -517,6 +540,9 @@ Qty: 1</textarea>
 <option value="Low-E" selected>Low-E</option>
 <option value="Obscure" >Obscure</option>
 </select>
+<button type="button" class="line-item-field-options-edit"
+data-edit-field-options="glass" data-edit-field-scope="window"
+title="Edit Glass choices">&#9998;</button>
 </div>
 <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
 <label class="checkbox-label">

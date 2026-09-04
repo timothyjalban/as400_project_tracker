@@ -26,8 +26,8 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 | Change a field's **default value** | `static/js/line-item-fields.js` | the entry's `default:` — `createLineItemTemplate()` builds from it |
 | Change a field's **editor input** (label, options, control) | `static/js/line-item-fields.js` | the entry's `render: { … }` block — `renderLineItemField()` renders it |
 | Edit a **bespoke** field (type toggle, room, vendor, prefit/BOM checkboxes) | `static/js/line-item-render.js` | in `renderLineItemsEditor()` |
-| Change the **editable dropdown lists** (hardware lever/knob, jamb size, bore diameter, door location) | `static/js/line-item-options.js` (frontend) + `blueprints/line_item_options.py` (save) | |
-| Change **vendor / style / series / color / fin-type** option lists | `static/js/line-item-catalog.js` (frontend) + `blueprints/line_item_options.py` | server-backed |
+| Change the **choices / label / AS400 text** of a managed dropdown (Material, Boring, Jamb Size, Swing, Handing, Hinge…) | **the "Line-Item Fields" toolbar button** — no code. Stored in `orders.db`. Code: `static/js/field-config.js` + `blueprints/field_config.py` + `core.py`; factory seed `data/line_item_field_defaults.json` |
+| Change **vendor / style / series / color / fin-type** option lists | `static/js/line-item-catalog.js` (frontend) + `blueprints/line_item_options.py` | server-backed; `➕ Add New` prompt flow |
 | Change what happens **when a field changes** (side effects, recalcs) | `static/js/line-items.js` | `updateLineItem()` |
 | Change **rough-opening / callout math**, size normalization | `static/js/line-items.js` | `calloutToDimensions`, `calculateDoorRoughOpeningDimensions`, `normalizeLineItem` |
 | Change **bulk-set defaults / bulk paste** | `static/js/line-item-bulk.js` | |
@@ -40,7 +40,7 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 | Change **what the preview shows** | `static/js/line-item-as400.js` | `buildStandardAs400CommentPreview` (comment block), `buildCtrlAltSDescription` (the 36-char description) |
 | Change the **structured plan** sent to the desktop helper | `static/js/as400-format.js` | `buildAs400RowPlan()` — the single source of truth; preview + payload both use it |
 | Change **which fields feed the AS400 text** | `static/js/line-item-fields.js` | the entry's `as400: { target, order, format }` |
-| Change **what actually gets typed** | `automation/launch_ibm.py` | `_build_macro_description` etc.; `run_vendor_sku_macro_dialog` types it. The `AS400_USE_ROW_PLAN` env flag makes it type the row plan verbatim instead. (Vendored from the old `C:\Projects\Order-Tracker` project — the `.ahk` macros are in `automation/as400_macros/`.) |
+| Change **what actually gets typed** | `automation/launch_ibm.py` | `_build_macro_description` etc.; `run_vendor_sku_macro_dialog` types it. The `AS400_USE_ROW_PLAN` env flag makes it type the row plan verbatim instead. The `.ahk` macros are in `automation/as400_macros/`. |
 | Change the **bridge** between web app and the typist | `desktop_helper_service.py` | the `/api/launch-*` endpoints; imports `launch_ibm` from `automation/` |
 
 ## Orders (not line items)
@@ -52,6 +52,7 @@ Every `static/js/*.js` is a plain script sharing globals, loaded in order by the
 | The sales-process / stage detail panes | `static/js/stage-details-rendering.js`, `stage-actions.js` |
 | Quote / invoice / PO tracking fields | `static/js/additional-tracking.js` |
 | OCR / bulk import | `static/js/ocr-import.js` + `ocr_processor.py` + `blueprints/ocr.py`, `blueprints/import_export.py` |
+| Add a new vendor-quote OCR parser (Orepac / Milgard / Pella style) | `ocr_processor.py` — write `_extract_<vendor>_quote_order()` + `_extract_<vendor>_items()`, slot it into the `process_ocr_text` **and** `process_bulk_form_pdf` chains, add a fixture under `tests/fixtures/ocr/` + a case in `tests/ocr_parse_test.py` |
 | DB schema / migrations | `core.py` |
 | Route registration | `app.py` → `blueprints/` |
 | Where the DB / attachments / OCR code lives | `orders.db` (root), `attachments/` (root, gitignored), `automation/` — all in this repo now. Override with `ORDER_TRACKER_DB_PATH` / `ORDER_TRACKER_ATTACHMENTS_PATH`. |

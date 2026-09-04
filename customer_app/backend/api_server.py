@@ -120,6 +120,8 @@ class LineItem(BaseModel):
     sill: Optional[str] = None
     finish_type: Optional[str] = None
     finish_detail: Optional[str] = None
+    finish_wood_species: Optional[str] = None
+    finish_stain_color: Optional[str] = None
     glass_tint: Optional[str] = None
     door_glass_shape: Optional[str] = None
     door_glass_lite_style: Optional[str] = None

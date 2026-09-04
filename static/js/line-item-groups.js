@@ -118,6 +118,8 @@ function renderAs400GroupHeader(groupName) {
                 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="quote" data-as400-group-name="${encodedGroup}">Create Quote</button>
                 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="invoice" data-as400-group-name="${encodedGroup}">Charge Sale</button>
                 <button type="button" class="btn btn-primary btn-sm" data-as400-group-action="special-order" data-as400-group-name="${encodedGroup}">Special Order</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="add-delivery" data-as400-group-name="${encodedGroup}" title="Add the $125 delivery line (Ctrl+Alt+D) to the AS400 quote open on screen">Add Delivery</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-as400-group-action="delivery-tag" data-as400-group-name="${encodedGroup}" title="Create a separate AS400 quote with only the $125 delivery line">Delivery Tag</button>
             </div>
         </div>
     `;

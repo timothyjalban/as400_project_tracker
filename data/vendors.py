@@ -12,6 +12,7 @@ COMMON_VENDORS = [
     {"name": "Marvin",          "sku": 663959, "type": "program", "program": r"C:\Users\tim.alban\AppData\Local\Apps\2.0\4ETO61NJ.JLE\G20P9D8L.QQ6\marv..tion_48d35c5b57ac38be_0001.0055_c5cdadb5e40f275c\MarvinOMS.MSIL.exe"},
     {"name": "Milgard",         "sku": 660509, "url": "https://ctbquoteplus.com/PCMSalesPortal81/Login.aspx?ReturnUrl=%2fPCMSalesPortal81%2fDashboard%2fDashboard.aspx"},
     {"name": "Orepac",          "sku": 660775, "url": "https://marketplace.orepac.com/Account/LogOn?returnUrl=%2FQuote"},
+    {"name": "Pella",           "sku": 664043, "url": "https://www.pella.com/professionals/"},
     {"name": "T.M. Cobb",       "sku": 660389, "type": "program", "program": r"C:\Program Files (x86)\T.M. Cobb\Online Quick Sale\winRDP.exe"},
     {"name": "Tru-Stile",       "sku": 661270, "url": "https://truquote.trustile.com/SalesPortal/Login.aspx?ReturnUrl=%2fSalesPortal%2fDashboard%2fDashboard.aspx%3flandingpage%3dHomeLandingPage&landingpage=HomeLandingPage"},
     {"name": "Velux",           "sku": 660347, "url": "https://www.veluxusa.com/"},

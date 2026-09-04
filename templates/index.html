@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260805-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260902-1') }}">
 </head>
 <body>
     <div class="container">
@@ -84,6 +84,9 @@
                 </div>
                 <div class="filter-group">
                     <button id="ocrImportBtn" class="btn-ocr">Bulk Import</button>
+                </div>
+                <div class="filter-group">
+                    <button id="fieldOptionsBtn" class="btn-export" type="button">Line-Item Fields</button>
                 </div>
             </div>
 
@@ -197,6 +200,8 @@
                                 <button type="button" class="btn btn-primary" onclick="createQuote()">Create Quote</button>
                                 <button type="button" class="btn btn-primary" onclick="createInvoice()">Charge Sale</button>
                                 <button type="button" class="btn btn-primary" onclick="createSpecialOrder()">Special Order</button>
+                                <button type="button" class="btn btn-secondary" onclick="addDeliveryToQuote()" title="Add the $125 delivery line (Ctrl+Alt+D) to the AS400 quote already open on screen">Add Delivery</button>
+                                <button type="button" class="btn btn-secondary" onclick="createDeliveryTag()" title="Create a separate AS400 quote containing only the $125 delivery line">Delivery Tag</button>
                                 <input type="file" id="processFileInput" multiple style="display: none;" onchange="handleProcessFileSelect(event)">
                                 <button type="button" class="btn btn-secondary" onclick="openProcessFilePicker()">Add Files</button>
                                 <input type="file" id="processQuoteImportInput" accept=".json,.csv,image/*,.pdf" style="display: none;" onchange="handleProcessQuoteImportFile(event)">
@@ -1306,37 +1311,88 @@
         </div>
     </div>
 
+    <!-- Line-Item Fields settings screen -->
+    <div id="fieldOptionsModal" class="modal">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">
+                <h2>Line-Item Fields</h2>
+                <button class="modal-close" onclick="closeFieldOptionsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: var(--padding-medium);">
+                    Rename a field or edit the choices in its dropdown. Changes are saved to the
+                    database and apply to every device. "AS400 text" on a choice controls exactly
+                    what that choice contributes to the AS400 preview and typed order.
+                </p>
+                <div id="fieldOptionsModalBody"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="downloadFieldConfig()">Download Field Config</button>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('fieldConfigRestoreInput').click()">Restore Field Config</button>
+                <input type="file" id="fieldConfigRestoreInput" accept=".json,application/json" style="display:none" onchange="restoreFieldConfigFromFile(this)">
+                <button type="button" class="btn btn-primary" onclick="closeFieldOptionsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline "edit choices" mini-editor (shared by every managed dropdown) -->
+    <div id="fieldOptionMiniEditor" class="modal">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">
+                <h2 id="fieldOptionMiniEditorTitle">Edit choices</h2>
+                <button class="modal-close" onclick="closeFieldOptionMiniEditor()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 10px;">
+                    Leave <b>Vendor</b> blank for a choice that applies to every vendor. A choice with a
+                    vendor set only appears when that vendor is selected on the line item.
+                </p>
+                <table class="field-options-table">
+                    <thead>
+                        <tr><th></th><th>Value</th><th>Display</th><th>Vendor</th><th>AS400 text</th><th></th></tr>
+                    </thead>
+                    <tbody id="fieldOptionMiniEditorRows"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="resetFieldOptionMiniEditor()">Reset to built-in</button>
+                <button type="button" class="btn btn-primary" onclick="closeFieldOptionMiniEditor()">Done</button>
+            </div>
+        </div>
+    </div>
+
     <button id="backToTopBtn" class="back-to-top-btn" type="button" title="Back to beginning stage">
         ↑ Top
     </button>
 
-    <script src="{{ url_for('static', filename='js/app.js', v='20260829-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-fields.js', v='20260830-2') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-options.js', v='20260830-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-groups.js', v='20260830-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260904-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-fields.js', v='20260902-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/field-config.js', v='20260902-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-options.js', v='20260902-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-groups.js', v='20260902-1') }}"></script>
     <script src="{{ url_for('static', filename='js/line-item-geometry.js', v='20260830-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-items.js', v='20260830-5') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-render.js', v='20260830-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-items.js', v='20260903-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-render.js', v='20260902-1') }}"></script>
     <script src="{{ url_for('static', filename='js/line-item-catalog.js', v='20260829-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260820-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/line-item-as400.js', v='20260829-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-bulk.js', v='20260902-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-item-as400.js', v='20260902-1') }}"></script>
     <script src="{{ url_for('static', filename='js/attachments.js', v='20260630-2') }}"></script>
     <script src="{{ url_for('static', filename='js/notes.js', v='20260630-2') }}"></script>
     <script src="{{ url_for('static', filename='js/reminders.js', v='20260729-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/document-generation.js', v='20260829-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/document-generation.js', v='20260902-1') }}"></script>
     <script src="{{ url_for('static', filename='js/as400-format.js', v='20260829-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/ocr-import.js', v='20260729-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/ocr-import.js', v='20260903-1') }}"></script>
     <script src="{{ url_for('static', filename='js/customer-lookup.js', v='20260829-1') }}"></script>
     <script src="{{ url_for('static', filename='js/additional-tracking.js', v='20260730-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/order-modal.js', v='20260820-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/order-modal.js', v='20260903-1') }}"></script>
     <script src="{{ url_for('static', filename='js/customer-history.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/export-backup.js', v='20260730-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/stage-actions.js', v='20260730-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/stage-actions.js', v='20260903-1') }}"></script>
     <script src="{{ url_for('static', filename='js/background-monitoring.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/autocomplete.js', v='20260730-1') }}"></script>
     <script src="{{ url_for('static', filename='js/order-list.js', v='20260829-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/order-selection.js', v='20260829-1') }}"></script>
-    <script src="{{ url_for('static', filename='js/stage-details-rendering.js', v='20260829-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/order-selection.js', v='20260903-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/stage-details-rendering.js', v='20260903-1') }}"></script>
 </body>
 </html>
 

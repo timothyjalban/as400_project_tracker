@@ -7,6 +7,67 @@ let stages = [];
 let currentOrder = null;
 let selectedOrderId = null;
 
+// ===== Order save guard =====
+// The id (and last-seen updated_at) of the order the visible form / line-item
+// editor was last populated from. Every PUT /api/orders/<id> is stamped with
+// this so the server can reject a save whose form data belongs to a different
+// order — the stale/cross-order bug that silently overwrote real orders
+// (Mary Zilge -> Bill Hanson, 2026-09-03).
+let orderFormBase = { id: null, updatedAt: null };
+
+function setOrderFormBase(order) {
+    if (order && order.id) {
+        orderFormBase = { id: Number(order.id), updatedAt: order.updated_at || null };
+    } else {
+        orderFormBase = { id: null, updatedAt: null };
+    }
+}
+
+// Wrap an order-update payload with the optimistic-lock stamp and POST it.
+// Returns { ok, status, result }. On a cross-order rejection (409 wrong_order)
+// it shows a blocking alert and refreshes the order — it never silently retries.
+async function putOrder(orderId, payload, options = {}) {
+    const body = { ...payload };
+    const baseId = options.baseOrderId != null ? Number(options.baseOrderId) : orderFormBase.id;
+    if (baseId != null && !Number.isNaN(baseId)) body.base_order_id = baseId;
+    if (orderFormBase.updatedAt) body.base_updated_at = orderFormBase.updatedAt;
+    if (options.source) body.save_source = options.source;
+
+    // Client-side stop: never send a save whose form base is a different order.
+    if (baseId != null && !Number.isNaN(baseId) && Number(orderId) !== baseId && !options.allowCrossOrder) {
+        console.error('Blocked cross-order save', { target: orderId, base: baseId, source: options.source });
+        showError(`Not saved: this form is showing order #${baseId}, not #${orderId}. Reopen the order and try again.`);
+        return { ok: false, status: 0, result: { error: 'wrong_order_client' } };
+    }
+
+    let response;
+    try {
+        response = await fetch(`${API_BASE}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    } catch (error) {
+        console.error('putOrder network error', error);
+        return { ok: false, status: 0, result: { error: 'network' } };
+    }
+
+    let result = {};
+    try { result = await response.json(); } catch (e) { result = {}; }
+
+    if (response.status === 409 && (result.error_code === 'wrong_order' || result.error === 'wrong_order')) {
+        console.error('Server blocked cross-order save', result);
+        alert(result.message || 'This order changed elsewhere — your change was not saved. The order will now reload.');
+        if (result.order) applyUpdatedOrderLocally(result.order);
+        if (typeof selectOrder === 'function' && selectedOrderId) {
+            try { await selectOrder(selectedOrderId); } catch (e) {}
+        }
+        return { ok: false, status: 409, result };
+    }
+
+    return { ok: !!result.success, status: response.status, result };
+}
+
 // Stage sequence (same as desktop app)
 const STAGES = [
     "ORDER_DETAILS",
@@ -378,6 +439,12 @@ function applyUpdatedOrderLocally(order) {
         selectedOrderId = order.id;
         currentOrder = order;
     }
+
+    // Keep the save-guard base in step with the order we just persisted, so a
+    // follow-up save isn't rejected as stale against its own prior write.
+    if (orderFormBase.id === Number(order.id)) {
+        orderFormBase.updatedAt = order.updated_at || orderFormBase.updatedAt;
+    }
 }
 
 function refreshOrderListAndProcess() {
@@ -595,16 +662,16 @@ document.addEventListener('DOMContentLoaded', () => {
     runStartupStep('stage tab loop', bindStageTabLoop);
     runStartupStep('bulk set panel', initBulkSetPanel);
     runStartupStep('load stages', loadStages);
+    runStartupStep('load line item field config', loadFieldConfig);
     runStartupStep('load item style options', loadItemStyleOptions);
     runStartupStep('load item vendor options', loadItemVendorOptions);
     runStartupStep('load vendor series options', loadVendorSeriesOptions);
     runStartupStep('load fin type options', loadFinTypeOptions);
     runStartupStep('load window color options', loadWindowColorOptions);
     runStartupStep('load vendor catalog', loadVendorCatalog);
-    runStartupStep('load window handing options', loadWindowHandingOptions);
-    runStartupStep('load hardware lever/knob styles', loadHardwareLeverKnobStyleOptions);
+    // window handing / jamb size / lever-knob lists now come from the DB via
+    // loadFieldConfig() above (Line-Item Fields settings screen).
     runStartupStep('load hardware product codes', loadHardwareProductCodeOptions);
-    runStartupStep('load jamb size options', loadJambSizeOptions);
     runStartupStep('load contacts', loadContacts);
     runStartupStep('initialize notifications', initializeNotifications);
     runStartupStep('start reminder checking', startReminderChecking);
@@ -664,7 +731,12 @@ document.addEventListener('DOMContentLoaded', () => {
             exportBlankSalesProcessHardCopy();
         });
     }
-    
+
+    const fieldOptionsBtn = document.getElementById('fieldOptionsBtn');
+    if (fieldOptionsBtn && typeof openFieldOptionsModal === 'function') {
+        fieldOptionsBtn.addEventListener('click', () => openFieldOptionsModal());
+    }
+
     backupAllBtn.addEventListener('click', () => {
         backupAllOrders();
     });
@@ -854,7 +926,12 @@ const STAGE_BLANK_PRESERVE_FIELDS = new Set([
     'customer_phone',
     'customer_email',
     'customer_number',
-    'project_name'
+    'project_name',
+    // 'vendor' is rendered on 4 stage cards (PO Created, Order Placed w/
+    // Vendor, Vendor Ack Received, ETA Confirmed) but only one card is in the
+    // DOM at a time - a save fired while a different stage is open must never
+    // let vendor go blank (2026-09-04, order #444).
+    'vendor'
 ]);
 
 function shouldPreserveInlineValueFromBlankStage(fieldName, stageValue) {
@@ -972,7 +1049,8 @@ function removeBlankStageTrackingFields(payload) {
         'quote_number', 'quote_date', 'quote_total',
         'quote_number_2', 'quote_date_2', 'quote_total_2',
         'invoice_number', 'invoice_date', 'invoice_total',
-        'po_numbers', 'po_date_signed', 'vendor_ack_number', 'vendor_ack_total', 'eta_date'
+        'po_numbers', 'po_date_signed', 'vendor_ack_number', 'vendor_ack_total', 'eta_date',
+        'vendor',
     ].forEach(fieldName => {
         if (!Object.prototype.hasOwnProperty.call(payload, fieldName)) return;
         const value = payload[fieldName];
@@ -1063,6 +1141,8 @@ function debounce(func, wait) {
 function populateInlineOrderForm(order) {
     if (!inlineOrderForm || !order) return;
 
+    setOrderFormBase(order);
+
     const stageSelect = document.getElementById(INLINE_ORDER_FIELDS.stage);
     if (stageSelect) {
         const options = [...new Set([...STAGES, ...stages])];
@@ -1146,6 +1226,14 @@ window.onclick = function(event) {
     }
     if (customerProfileModal && event.target === customerProfileModal) {
         closeCustomerProfileModal();
+    }
+    const fieldOptionsModal = document.getElementById('fieldOptionsModal');
+    if (fieldOptionsModal && event.target === fieldOptionsModal) {
+        closeFieldOptionsModal();
+    }
+    const fieldOptionMiniEditor = document.getElementById('fieldOptionMiniEditor');
+    if (fieldOptionMiniEditor && event.target === fieldOptionMiniEditor) {
+        closeFieldOptionMiniEditor();
     }
 }
 

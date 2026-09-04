@@ -636,7 +636,7 @@ function updateLineItem(index, field, value, options = {}) {
         return;
     }
 
-    //"Add New Jamb Size"
+    //"Add New Product Code"
     if (field === 'hardware_product_code' && isAddNewLineItemOption(field, value)) {
         guardOnce(currentLineItems[index], '__addingHardwareProductCode', () => {
             return promptAndSetHardwareCustomField(index, 'hardware_product_code', 'product code');
@@ -645,20 +645,6 @@ function updateLineItem(index, field, value, options = {}) {
         return;
     }
 
-    if (field === 'hardware_lever_knob_style' && isAddNewLineItemOption(field, value)) {
-        guardOnce(currentLineItems[index], '__addingHardwareLeverKnobStyle', () => {
-            return promptAndSetHardwareCustomField(index, 'hardware_lever_knob_style', 'lever/knob style');
-        });
-        if (shouldRender) renderLineItemsEditor();
-        return;
-    }
-    if (field === 'jamb_size' && isAddNewLineItemOption(field, value)) {
-        guardOnce(currentLineItems[index], '__addingJambSize', () => {
-            return addJambSizeOption(index);
-        });
-        if (shouldRender) renderLineItemsEditor();
-        return;
-    }
     //"Add New Style"
     if (field === 'style' && isAddNewLineItemOption(field, value)) {
 
@@ -670,21 +656,6 @@ function updateLineItem(index, field, value, options = {}) {
         return;
     }
 
-    if (field === 'operation' && isAddNewLineItemOption(field, value)) {
-        guardOnce(currentLineItems[index], '__addingHanding', () => {
-            return addWindowHandingOption(index);
-        });
-        if (shouldRender) renderLineItemsEditor();
-        return;
-    }
-
-    if (field === 'prefit_bore_diameter' && isAddNewLineItemOption(field, value)) {
-        guardOnce(currentLineItems[index], '__addingBoreDiameter', () => {
-            return addPrefitBoreDiameterOption(index);
-        });
-        if (shouldRender) renderLineItemsEditor();
-        return;
-    }
     if (field === 'fin_type' && isAddNewLineItemOption(field, value)) {
         guardOnce(currentLineItems[index], '__addingFinType', () => {
             return addFinTypeOption(index);
@@ -980,19 +951,12 @@ async function persistLineItemsStateSilently(orderId = null) {
         const changedLineItemsJson = getChangedLineItemsJson();
         if (changedLineItemsJson === undefined) return;
 
-        const response = await fetch(`${API_BASE}/orders/${activeOrderId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                line_items: changedLineItemsJson,
-                ...prefitPayload
-            })
-        });
+        const { ok, result } = await putOrder(activeOrderId, {
+            line_items: changedLineItemsJson,
+            ...prefitPayload,
+        }, { source: 'line-items' });
 
-        const result = await response.json();
-        if (!result.success || !result.order) {
+        if (!ok || !result.order) {
             return;
         }
 

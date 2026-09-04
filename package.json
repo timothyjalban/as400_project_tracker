@@ -10,6 +10,7 @@
     "snapshots:preview": "node tests/snapshot_preview.mjs",
     "snapshots:macro": "python tests/snapshot_macro.py",
     "registry": "node tests/line_item_fields.mjs",
+    "field-config": "node tests/line_item_field_config.mjs",
     "fixtures": "python tests/export_fixtures.py"
   }
 }

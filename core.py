@@ -252,6 +252,18 @@ FIN_TYPE_ALIASES = {
     '1 setback': '1" Setback',
 }
 
+# Factory defaults for user-editable line-item dropdowns + labels. This JSON is
+# the DB seed source (hand-maintained, like ITEM_STYLE_DEFAULTS above). Seeded
+# once into line_item_field_options / line_item_field_labels per field; after
+# that the DB is authoritative and this file is never consulted for that field.
+try:
+    LINE_ITEM_FIELD_DEFAULTS = json.loads(
+        (Path(__file__).resolve().parent / 'data' / 'line_item_field_defaults.json').read_text('utf-8')
+    )
+except (OSError, ValueError) as _exc:  # pragma: no cover - misconfig only
+    logging.getLogger(__name__).warning('line_item_field_defaults.json missing/invalid: %s', _exc)
+    LINE_ITEM_FIELD_DEFAULTS = {'labels': {}, 'options': {}}
+
 
 def normalize_fin_type_name(value: Any) -> str:
     """Normalize fin type text and map legacy aliases to canonical labels."""
@@ -308,6 +320,8 @@ def get_db_connection():
     ensure_vendor_series_options_schema(conn)
     ensure_fin_type_options_schema(conn)
     ensure_window_color_options_schema(conn)
+    ensure_line_item_field_config_schema(conn)
+    ensure_order_change_log_schema(conn)
     return conn
 
 
@@ -1098,6 +1112,455 @@ def fetch_window_color_options(conn):
         """
     ).fetchall()
     return [row['color_name'] for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Line-item field config: user-editable dropdown choices + field labels.
+# One generic table keyed by (field_key, item_scope, value); a small labels
+# table for per-field label overrides. Seeded once from
+# data/line_item_field_defaults.json (see LINE_ITEM_FIELD_DEFAULTS), then the
+# DB is authoritative. Consumed by blueprints/field_config.py and
+# static/js/field-config.js.
+# ---------------------------------------------------------------------------
+
+def ensure_line_item_field_config_schema(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS line_item_field_options (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            field_key     TEXT NOT NULL,
+            item_scope    TEXT NOT NULL DEFAULT '*',
+            vendor        TEXT NOT NULL DEFAULT '',
+            value         TEXT NOT NULL,
+            display_label TEXT,
+            as400_text    TEXT,
+            sort_order    INTEGER NOT NULL DEFAULT 0,
+            active        INTEGER NOT NULL DEFAULT 1,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(field_key, item_scope, vendor, value COLLATE NOCASE)
+        )
+        """
+    )
+    # Migrate a pre-vendor table (shipped briefly without the `vendor` column):
+    # rebuild it so the UNIQUE constraint includes vendor.
+    cols = {r['name'] for r in conn.execute("PRAGMA table_info(line_item_field_options)")}
+    if 'vendor' not in cols:
+        conn.executescript(
+            """
+            ALTER TABLE line_item_field_options RENAME TO _lifo_old;
+            CREATE TABLE line_item_field_options (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                field_key     TEXT NOT NULL,
+                item_scope    TEXT NOT NULL DEFAULT '*',
+                vendor        TEXT NOT NULL DEFAULT '',
+                value         TEXT NOT NULL,
+                display_label TEXT,
+                as400_text    TEXT,
+                sort_order    INTEGER NOT NULL DEFAULT 0,
+                active        INTEGER NOT NULL DEFAULT 1,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(field_key, item_scope, vendor, value COLLATE NOCASE)
+            );
+            INSERT INTO line_item_field_options
+                (id, field_key, item_scope, vendor, value, display_label, as400_text, sort_order, active, created_at, updated_at)
+            SELECT id, field_key, item_scope, '', value, display_label, as400_text, sort_order, active, created_at, updated_at
+              FROM _lifo_old;
+            DROP TABLE _lifo_old;
+            """
+        )
+    conn.execute("DROP INDEX IF EXISTS idx_lifo_field")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_lifo_field ON line_item_field_options(field_key, item_scope, active)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS line_item_field_labels (
+            field_key  TEXT NOT NULL,
+            item_scope TEXT NOT NULL DEFAULT '*',
+            label      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (field_key, item_scope)
+        )
+        """
+    )
+
+    seeded = _seed_line_item_field_options(conn)
+    if 'style' in seeded:
+        _migrate_door_styles_into_field_config(conn)
+    conn.commit()
+
+
+# Fields whose silent overwrite by a stale/cross-order form save is
+# catastrophic (they identify the order and its contents). A PUT that changes
+# any of these is guarded by an optimistic-lock check in blueprints/orders.py
+# and every such change is recorded in order_change_log.
+PROTECTED_ORDER_FIELDS = (
+    'customer_name',
+    'project_name',
+    'customer_phone',
+    'customer_email',
+    'line_items',
+)
+
+
+def ensure_order_change_log_schema(conn):
+    """Append-only audit of changes to the protected order fields, plus any
+    save that was *blocked* for targeting the wrong order. Lets a bad
+    overwrite be spotted and undone immediately instead of discovered weeks
+    later with no history (see the Mary Zilge / Bill Hanson incident,
+    2026-09-03)."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_change_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id   INTEGER NOT NULL,
+            field      TEXT NOT NULL,
+            old_value  TEXT,
+            new_value  TEXT,
+            source     TEXT,
+            base_order_id INTEGER,
+            blocked    INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_order_change_log_order "
+        "ON order_change_log(order_id, created_at)"
+    )
+    conn.commit()
+
+
+def record_order_field_changes(conn, order_id, changes, *, source=None,
+                               base_order_id=None, blocked=False):
+    """`changes` is an iterable of (field, old_value, new_value) tuples."""
+    rows = [
+        (
+            order_id,
+            field,
+            None if old is None else str(old),
+            None if new is None else str(new),
+            source,
+            base_order_id,
+            1 if blocked else 0,
+        )
+        for field, old, new in changes
+    ]
+    if not rows:
+        return
+    conn.executemany(
+        "INSERT INTO order_change_log "
+        "(order_id, field, old_value, new_value, source, base_order_id, blocked) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+
+
+def _migrate_door_styles_into_field_config(conn):
+    """One-time (when 'style' is first seeded): fold any custom door styles from
+    the item_style_options catalog into line_item_field_options
+    (field_key='style', scope='door') so the switch to a DB-managed Door Style
+    dropdown doesn't drop shop-added styles."""
+    try:
+        rows = conn.execute(
+            "SELECT style_name FROM item_style_options WHERE item_type = 'door'"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return
+    for row in rows:
+        name = (row['style_name'] or '').strip()
+        if not name:
+            continue
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO line_item_field_options
+                (field_key, item_scope, vendor, value, sort_order)
+            VALUES ('style', 'door', '', ?, ?)
+            """,
+            (name, _next_sort_order(conn, 'style', 'door')),
+        )
+
+
+def _seed_line_item_field_options(conn, only_field=None):
+    """Insert factory options for any managed field that has no rows yet.
+
+    Per-field (not global) so adding a new field to the defaults JSON seeds it
+    on the next connection, while a user who has edited an existing field's list
+    is never re-clobbered. `only_field` restricts seeding to one key (used by
+    reset_line_item_field_config).
+    """
+    options = LINE_ITEM_FIELD_DEFAULTS.get('options', {})
+    seeded = set()
+    for field_key, spec in options.items():
+        if only_field is not None and field_key != only_field:
+            continue
+        scope = spec.get('scope', '*')
+        existing = conn.execute(
+            "SELECT 1 FROM line_item_field_options WHERE field_key = ? LIMIT 1",
+            (field_key,),
+        ).fetchone()
+        if existing:
+            continue
+        seeded.add(field_key)
+        for i, opt in enumerate(spec.get('items', [])):
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO line_item_field_options
+                    (field_key, item_scope, value, display_label, as400_text, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    field_key,
+                    scope,
+                    opt['value'],
+                    opt.get('label'),
+                    opt.get('as400_text'),
+                    i * 10,
+                ),
+            )
+    return seeded
+
+
+def _line_item_field_option_row(row):
+    return {
+        'id': row['id'],
+        'field_key': row['field_key'],
+        'scope': row['item_scope'],
+        'vendor': row['vendor'] or '',
+        'value': row['value'],
+        'label': row['display_label'] or row['value'],
+        'as400_text': row['as400_text'],
+        'sort_order': row['sort_order'],
+        'active': bool(row['active']),
+    }
+
+
+def fetch_line_item_field_config(conn):
+    """Return {options: {field_key: [row, ...]}, labels: {field_key: str}}.
+
+    Every managed field in LINE_ITEM_FIELD_DEFAULTS is guaranteed a key in
+    `options` (synthesized from the JSON if the table somehow has no rows).
+    `labels` holds only user overrides.
+    """
+    options = {}
+    rows = conn.execute(
+        """
+        SELECT id, field_key, item_scope, vendor, value, display_label, as400_text, sort_order, active
+          FROM line_item_field_options
+         ORDER BY field_key, item_scope, vendor, sort_order, value COLLATE NOCASE
+        """
+    ).fetchall()
+    for row in rows:
+        options.setdefault(row['field_key'], []).append(_line_item_field_option_row(row))
+
+    for field_key, spec in LINE_ITEM_FIELD_DEFAULTS.get('options', {}).items():
+        if field_key in options:
+            continue
+        scope = spec.get('scope', '*')
+        options[field_key] = [
+            {
+                'id': None, 'field_key': field_key, 'scope': scope, 'vendor': opt.get('vendor', ''),
+                'value': opt['value'], 'label': opt.get('label') or opt['value'],
+                'as400_text': opt.get('as400_text'), 'sort_order': i * 10, 'active': True,
+            }
+            for i, opt in enumerate(spec.get('items', []))
+        ]
+
+    labels = {}
+    for row in conn.execute("SELECT field_key, item_scope, label FROM line_item_field_labels").fetchall():
+        key = row['field_key'] if row['item_scope'] == '*' else f"{row['field_key']}@{row['item_scope']}"
+        labels[key] = row['label']
+
+    return {'options': options, 'labels': labels}
+
+
+def _next_sort_order(conn, field_key, item_scope, vendor=''):
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), -10) AS m FROM line_item_field_options WHERE field_key = ? AND item_scope = ? AND vendor = ?",
+        (field_key, item_scope, vendor),
+    ).fetchone()
+    return int(row['m']) + 10
+
+
+def upsert_line_item_field_option(conn, field_key, value, item_scope='*', display_label=None, as400_text=None, vendor=''):
+    field_key = str(field_key).strip()
+    value = str(value).strip()
+    item_scope = (str(item_scope).strip() or '*')
+    vendor = str(vendor or '').strip()
+    if not field_key or not value:
+        raise ValueError('field_key and value are required')
+
+    existing = conn.execute(
+        "SELECT id FROM line_item_field_options WHERE field_key = ? AND item_scope = ? AND vendor = ? AND value = ? COLLATE NOCASE",
+        (field_key, item_scope, vendor, value),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            """
+            UPDATE line_item_field_options
+               SET display_label = ?, as400_text = ?, active = 1, updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (display_label or None, as400_text or None, existing['id']),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO line_item_field_options
+                (field_key, item_scope, vendor, value, display_label, as400_text, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (field_key, item_scope, vendor, value, display_label or None, as400_text or None,
+             _next_sort_order(conn, field_key, item_scope, vendor)),
+        )
+    conn.commit()
+
+
+def update_line_item_field_option(conn, option_id, *, value=None, display_label=None, as400_text=None, active=None, vendor=None):
+    sets, params = [], []
+    if value is not None:
+        sets.append('value = ?'); params.append(str(value).strip())
+    if display_label is not None:
+        sets.append('display_label = ?'); params.append(str(display_label).strip() or None)
+    if as400_text is not None:
+        sets.append('as400_text = ?'); params.append(str(as400_text).strip() or None)
+    if vendor is not None:
+        sets.append('vendor = ?'); params.append(str(vendor or '').strip())
+    if active is not None:
+        sets.append('active = ?'); params.append(1 if active else 0)
+    if not sets:
+        return
+    sets.append("updated_at = datetime('now')")
+    params.append(option_id)
+    conn.execute(f"UPDATE line_item_field_options SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+
+
+def set_line_item_field_option_active(conn, option_id, active, hard=False):
+    if hard and active is False:
+        conn.execute("DELETE FROM line_item_field_options WHERE id = ?", (option_id,))
+    else:
+        conn.execute(
+            "UPDATE line_item_field_options SET active = ?, updated_at = datetime('now') WHERE id = ?",
+            (1 if active else 0, option_id),
+        )
+    conn.commit()
+
+
+def reorder_line_item_field_options(conn, field_key, item_scope, ordered_ids):
+    for idx, option_id in enumerate(ordered_ids):
+        conn.execute(
+            """
+            UPDATE line_item_field_options
+               SET sort_order = ?, updated_at = datetime('now')
+             WHERE id = ? AND field_key = ? AND item_scope = ?
+            """,
+            (idx * 10, option_id, field_key, item_scope),
+        )
+    conn.commit()
+
+
+def set_line_item_field_label(conn, field_key, label, item_scope='*'):
+    field_key = str(field_key).strip()
+    item_scope = (str(item_scope).strip() or '*')
+    label = str(label or '').strip()
+    if not label:
+        conn.execute(
+            "DELETE FROM line_item_field_labels WHERE field_key = ? AND item_scope = ?",
+            (field_key, item_scope),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO line_item_field_labels (field_key, item_scope, label, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(field_key, item_scope) DO UPDATE SET label = excluded.label, updated_at = datetime('now')
+            """,
+            (field_key, item_scope, label),
+        )
+    conn.commit()
+
+
+def reset_line_item_field_config(conn, field_key=None):
+    if field_key:
+        conn.execute("DELETE FROM line_item_field_options WHERE field_key = ?", (field_key,))
+        conn.execute("DELETE FROM line_item_field_labels WHERE field_key = ?", (field_key,))
+    else:
+        conn.execute("DELETE FROM line_item_field_options")
+        conn.execute("DELETE FROM line_item_field_labels")
+    _seed_line_item_field_options(conn, only_field=field_key)
+    conn.commit()
+
+
+def export_line_item_field_config(conn):
+    """Serialize the live config in the same shape as line_item_field_defaults.json."""
+    config = fetch_line_item_field_config(conn)
+    options = {}
+    for field_key, rows in config['options'].items():
+        scope = rows[0]['scope'] if rows else '*'
+        items = []
+        for r in rows:
+            item = {'value': r['value']}
+            if r['label'] and r['label'] != r['value']:
+                item['label'] = r['label']
+            if r['as400_text']:
+                item['as400_text'] = r['as400_text']
+            if r.get('vendor'):
+                item['vendor'] = r['vendor']
+            if not r['active']:
+                item['active'] = False
+            items.append(item)
+        options[field_key] = {'scope': scope, 'items': items}
+    return {'labels': config['labels'], 'options': options}
+
+
+def import_line_item_field_config(conn, payload):
+    """Upsert options + labels from an exported/defaults-shaped dict. Returns counts."""
+    if not isinstance(payload, dict):
+        raise ValueError('config payload must be an object')
+    inserted = updated = 0
+    for field_key, spec in (payload.get('options') or {}).items():
+        scope = (spec or {}).get('scope', '*')
+        for i, opt in enumerate(spec.get('items', []) if isinstance(spec, dict) else []):
+            value = str(opt.get('value', '')).strip()
+            if not value:
+                continue
+            vendor = str(opt.get('vendor', '') or '').strip()
+            row = conn.execute(
+                "SELECT id FROM line_item_field_options WHERE field_key = ? AND item_scope = ? AND vendor = ? AND value = ? COLLATE NOCASE",
+                (field_key, scope, vendor, value),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """
+                    UPDATE line_item_field_options
+                       SET display_label = ?, as400_text = ?, sort_order = ?,
+                           active = ?, updated_at = datetime('now')
+                     WHERE id = ?
+                    """,
+                    (opt.get('label') or None, opt.get('as400_text') or None, i * 10,
+                     0 if opt.get('active') is False else 1, row['id']),
+                )
+                updated += 1
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO line_item_field_options
+                        (field_key, item_scope, vendor, value, display_label, as400_text, sort_order, active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (field_key, scope, vendor, value, opt.get('label') or None, opt.get('as400_text') or None,
+                     i * 10, 0 if opt.get('active') is False else 1),
+                )
+                inserted += 1
+    for key, label in (payload.get('labels') or {}).items():
+        field_key, _, scope = key.partition('@')
+        set_line_item_field_label(conn, field_key, label, scope or '*')
+    conn.commit()
+    return {'inserted': inserted, 'updated': updated}
+
 
 def normalize_po_numbers(raw_value):
     """Return a de-duplicated list of PO numbers from list/string input."""

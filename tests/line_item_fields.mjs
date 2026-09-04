@@ -115,6 +115,30 @@ for (const f of LINE_ITEM_FIELDS) {
   if (f.as400 && !['description', 'comment', 'row'].includes(f.as400.target)) problems.push(`"${f.key}": bad as400.target`);
 }
 
+// Managed dropdowns (optionsSource: 'fieldConfig') must (a) not also carry a
+// static render.options array - the DB is the only copy - and (b) have a
+// factory-defaults entry in data/line_item_field_defaults.json.
+const fieldDefaults = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'data/line_item_field_defaults.json'), 'utf8'),
+);
+const seededKeys = new Set(Object.keys(fieldDefaults.options || {}));
+for (const f of LINE_ITEM_FIELDS) {
+  const renders = f.render?.variants ? Object.values(f.render.variants) : (f.render ? [f.render] : []);
+  const managed = renders.some((r) => r && r.optionsSource === 'fieldConfig');
+  if (!managed) continue;
+  if (renders.some((r) => Array.isArray(r?.options))) {
+    problems.push(`"${f.key}": optionsSource 'fieldConfig' AND a static render.options - remove the array`);
+  }
+  if (!seededKeys.has(f.key)) {
+    problems.push(`"${f.key}" is fieldConfig-managed but has no entry in data/line_item_field_defaults.json`);
+  }
+}
+for (const key of seededKeys) {
+  if (!registryKeys.has(key)) {
+    problems.push(`data/line_item_field_defaults.json has "${key}" but it's not a registry key`);
+  }
+}
+
 if (problems.length) {
   console.error(`line-item field registry: ${problems.length} problem(s)\n`);
   for (const p of problems) console.error(`  - ${p}`);

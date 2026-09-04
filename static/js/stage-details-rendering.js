@@ -262,17 +262,11 @@ async function jumpToStage(stage) {
     attachAdditionalTrackingPayload(payload);
 
     try {
-        const response = await fetch(`${API_BASE}/orders/${order.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-        if (!result.success || !result.order) {
-            showError(result.error || 'Failed to jump to stage');
+        const { ok, status, result } = await putOrder(order.id, payload, { source: 'jump-stage' });
+        if (!ok || !result.order) {
+            if (status !== 409 && status !== 0) {
+                showError(result.error || 'Failed to jump to stage');
+            }
             return;
         }
 

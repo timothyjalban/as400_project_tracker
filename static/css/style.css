@@ -3985,3 +3985,151 @@ body.high-contrast .item-add-style-button:hover {
         flex: 1 1 140px;
     }
 }
+
+/* ---- Line-Item Fields: inline "edit choices" + settings screen ---- */
+.line-item-field {
+    position: relative;
+}
+
+.line-item-field-options-edit {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-small);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    opacity: 0.55;
+}
+
+.line-item-field-options-edit:hover {
+    opacity: 1;
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.field-options-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.field-options-table th {
+    text-align: left;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    padding: 4px 6px;
+    font-weight: var(--font-weight-medium);
+}
+
+.field-options-table td {
+    padding: 3px 6px;
+    vertical-align: middle;
+}
+
+.field-options-table input[type="text"] {
+    width: 100%;
+    min-width: 90px;
+    padding: 5px 7px;
+    background-color: #2A2A2A;
+    border: 1px solid #404040;
+    border-radius: var(--radius-small);
+    color: #fff;
+}
+
+.field-options-table .field-opt-move button,
+.field-options-table td:last-child button {
+    padding: 2px 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.field-options-table .field-opt-move button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.field-options-table tr.field-opt-removed input {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
+.field-options-table tr.field-opt-add-row td {
+    padding-top: 10px;
+}
+
+.field-options-group {
+    margin-bottom: 18px;
+}
+
+.field-options-group h3 {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
+.field-options-field {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 0;
+}
+
+.field-options-field-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.field-options-field-label input {
+    padding: 5px 8px;
+    background-color: #2A2A2A;
+    border: 1px solid #404040;
+    border-radius: var(--radius-small);
+    color: #fff;
+    width: 160px;
+}
+
+.field-options-choices {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.field-options-choices-summary {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.field-options-choices button {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-small);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+}

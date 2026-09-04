@@ -44,21 +44,17 @@ function escapeHtmlAttribute(text) {
 
 // Dynamic option lists for registry fields whose choices aren't a static array.
 // Keyed by `render.optionsSource` in line-item-fields.js. Each gets (item).
-function lineItemOptionSource(name, item) {
+function lineItemOptionSource(name, item, field) {
     switch (name) {
+        case 'fieldConfig':
+            return (field && typeof fieldConfigOptions === 'function')
+                ? fieldConfigOptions(field.key, item.type, item[field.key], item.vendor)
+                : [];
         case 'hardwareProductCode': return getHardwareProductCodeOptions(item);
-        case 'hardwareLeverKnob': return getHardwareLeverKnobStyleOptions(item.hardware_lever_knob_style);
         case 'hardwareFinishCode': return HARDWARE_FINISH_US_CODE_OPTIONS;
         case 'doorStyle': return [...getStyleOptionsForType('door'), '➕ Add New Style'];
         case 'windowStyle': return [...getStyleOptionsForType('window'), '➕ Add New Style'];
         case 'hardwareStyle': return [...getStyleOptionsForType('hardware'), '+ Add New Style'];
-        case 'jambSize': return [
-            ...(item.jamb_size && !getJambSizeOptions().some(o => o.toLowerCase() === String(item.jamb_size).toLowerCase())
-                ? [item.jamb_size] : []),
-            ...getJambSizeOptions(),
-            '➕ Add New Jamb Size',
-        ];
-        case 'prefitBoreDiameter': return [...getPrefitBoreDiameterOptions(), '➕ Add New Bore Diameter'];
         case 'itemSeries': {
             const raw = getSeriesOptionsForItemVendor(item.type, item.vendor);
             const isHw = item.type === 'hardware';
@@ -67,7 +63,6 @@ function lineItemOptionSource(name, item) {
                 ? [item.series, ...opts] : opts;
             return [...withSel, '➕ Add New Model'];
         }
-        case 'winHanding': return [...getWindowHandingOptions(), '➕ Add New Handing'];
         case 'winFinType': {
             const opts = getFinTypeOptions();
             const withSel = item.fin_type && !opts.includes(item.fin_type) ? [item.fin_type, ...opts] : opts;
@@ -99,11 +94,15 @@ function renderLineItemField(item, index, key) {
         }
     }
 
+    // DB-backed label override (Line-Item Fields settings screen). Falls back to
+    // the render label (variant-aware) when there's no override.
+    const controlLabel = (typeof fieldLabel === 'function') ? fieldLabel(key, item.type, r.label) : r.label;
+
     if (field.control === 'checkbox') {
         return `<div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
                         <label class="checkbox-label">
                             <input type="checkbox" ${value ? 'checked' : ''} data-item-index="${index}" data-item-field="${key}">
-                            <span>${r.label}</span>
+                            <span>${controlLabel}</span>
                         </label>
                     </div>`;
     }
@@ -114,9 +113,24 @@ function renderLineItemField(item, index, key) {
     let placeholder = r.placeholder;
     if (placeholder === '@series') placeholder = item.vendor ? 'Select model' : 'Choose vendor first';
 
+    // Is this dropdown managed by the Line-Item Fields config (DB-backed)?
+    // `optionsSource: 'fieldConfig'` on the resolved render (variant-aware) is
+    // the marker - so a polymorphic field like `style` can be managed for one
+    // item type and catalog-backed for another.
+    const fieldConfigManaged = field.control === 'select'
+        && (r.optionsSource === 'fieldConfig'
+            || (!r.optionsSource && typeof isFieldConfigManaged === 'function' && isFieldConfigManaged(key)));
+
     let control;
     if (field.control === 'select') {
-        const options = r.optionsSource ? lineItemOptionSource(r.optionsSource, item) : (r.options || []);
+        let options;
+        if (fieldConfigManaged) {
+            options = fieldConfigOptions(key, item.type, value, item.vendor);
+        } else if (r.optionsSource) {
+            options = lineItemOptionSource(r.optionsSource, item, field);
+        } else {
+            options = r.options || [];
+        }
         // boolSelect: a Yes/No dropdown bound to a boolean field.
         let selected = r.boolSelect ? (value ? 'Yes' : 'No') : value;
         if ((selected === undefined || selected === null || selected === '') && r.defaultValue) selected = r.defaultValue;
@@ -141,8 +155,15 @@ function renderLineItemField(item, index, key) {
         control += `\n                        ${btn}`;
     }
 
+    // Inline "edit choices" affordance for DB-managed dropdowns.
+    if (fieldConfigManaged) {
+        control += `\n                        <button type="button" class="line-item-field-options-edit"
+                            data-edit-field-options="${key}" data-edit-field-scope="${item.type}"
+                            title="Edit ${escapeHtmlAttribute(controlLabel)} choices">&#9998;</button>`;
+    }
+
     return `<div class="${wrapperClass}">
-                        <label>${r.label}</label>
+                        <label>${controlLabel}</label>
                         ${control}
                     </div>`;
 }
@@ -382,13 +403,14 @@ function renderLineItemsEditor() {
     
                     ${renderLineItemField(item, index, "series")}
                     ${!isHardware ? renderLineItemField(item, index, "size_mode") : ''}
-                    ${renderLineItemField(item, index, "price")}
                     ${!isHardware ? (isCalloutSize && !isGableWindow
                         ? renderLineItemField(item, index, "callout_size")
                         : isGableWindow
                         ? ["width", "gable_tall_side", "gable_short_side"].map(k => renderLineItemField(item, index, k)).join('')
                         : ["width", "height"].map(k => renderLineItemField(item, index, k)).join('')
-                    ) : ''}                </div>
+                    ) : ''}
+                    ${renderLineItemField(item, index, "price")}
+                </div>
 
                 ${isHardware ? `
                 <div class="line-item-options line-item-hardware-fields ${isCollapsed ? 'collapsed' : ''}">
@@ -406,7 +428,7 @@ function renderLineItemsEditor() {
                     ${["sidelites", "transom"].map(k => renderLineItemField(item, index, k)).join('')}
                     ` : ''}
                     ${renderLineItemField(item, index, "swing")}
-                    ${["door_location", "material", "door_texture", "core", "sticking", "glass_tint", "door_glass_shape", "door_glass_lite_style", "door_frame_profile", "finish_type", "finish_detail", "panel_style", "boring", "hinge_size", "hinge_finish", "exterior_trim", "sill", "hardware_option"].map(k => renderLineItemField(item, index, k)).join('')}
+                    ${["door_location", "material", "door_texture", "core", "sticking", "glass_tint", "door_glass_shape", "door_glass_lite_style", "door_frame_profile", "finish_type", "finish_wood_species", "finish_stain_color", "panel_style", "boring", "hinge_size", "hinge_finish", "exterior_trim", "sill", "hardware_option"].map(k => renderLineItemField(item, index, k)).join('')}
                     <div class="line-item-field line-item-field-checkbox line-item-field-checkbox-align-input">
                         <label class="checkbox-label">
                             <input type="checkbox" ${item.qlon ? 'checked' : ''} data-item-index="${index}" data-item-field="qlon">
@@ -507,6 +529,10 @@ function bindLineItemsEditorEvents() {
                 await createInvoice(groupName);
             } else if (action === 'special-order' && typeof createSpecialOrder === 'function') {
                 await createSpecialOrder(groupName);
+            } else if (action === 'add-delivery' && typeof addDeliveryToQuote === 'function') {
+                await addDeliveryToQuote();
+            } else if (action === 'delivery-tag' && typeof createDeliveryTag === 'function') {
+                await createDeliveryTag();
             }
         });
     });
@@ -584,15 +610,14 @@ function bindLineItemsEditorEvents() {
         });
     });
 
-    lineItemsList.querySelectorAll('[data-add-handing]').forEach(button => {
+    lineItemsList.querySelectorAll('[data-edit-field-options]').forEach(button => {
         button.addEventListener('click', () => {
-            addWindowHandingOption();
-        });
-    });
-
-    lineItemsList.querySelectorAll('[data-add-jamb-size]').forEach(button => {
-        button.addEventListener('click', () => {
-            addJambSizeOption();
+            if (typeof openFieldOptionMiniEditor === 'function') {
+                openFieldOptionMiniEditor(
+                    button.getAttribute('data-edit-field-options'),
+                    button.getAttribute('data-edit-field-scope'),
+                );
+            }
         });
     });
 

@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 from flask import Blueprint, Response, jsonify, request, send_file
 
 from core import (
+    PROTECTED_ORDER_FIELDS,
     STAGES,
     _coerce_bool,
     _table_exists,
@@ -26,6 +27,7 @@ from core import (
     dict_from_row,
     get_db_connection,
     normalize_po_numbers,
+    record_order_field_changes,
     upsert_customer_profile,
 )
 from data.database import backup_order
@@ -33,6 +35,46 @@ from data.database import backup_order
 logger = logging.getLogger(__name__)
 
 orders_bp = Blueprint('orders', __name__)
+
+
+def _norm_for_compare(value: Any) -> str:
+    """Loose equality for change detection: None/'' are the same, whitespace and
+    surrounding quotes don't count, line_items JSON is compared structurally."""
+    if value is None:
+        return ''
+    text = str(value).strip()
+    return text
+
+
+def _line_items_equivalent(a: Any, b: Any) -> bool:
+    def _load(v):
+        if v is None or v == '':
+            return None
+        if isinstance(v, (list, dict)):
+            return v
+        try:
+            return json.loads(v)
+        except (TypeError, ValueError):
+            return v
+    return _load(a) == _load(b)
+
+
+def _protected_field_changes(update_fields: Dict[str, Any], existing_row) -> List[tuple]:
+    """(field, old, new) for every protected field this payload would actually
+    change. Empty list => the save touches nothing identity-critical."""
+    changes: List[tuple] = []
+    existing_keys = set(existing_row.keys())
+    for field in PROTECTED_ORDER_FIELDS:
+        if field not in update_fields:
+            continue
+        old = existing_row[field] if field in existing_keys else None
+        new = update_fields[field]
+        if field == 'line_items':
+            if not _line_items_equivalent(old, new):
+                changes.append((field, old, new))
+        elif _norm_for_compare(old) != _norm_for_compare(new):
+            changes.append((field, old, new))
+    return changes
 
 
 @orders_bp.route('/api/orders', methods=['GET'])
@@ -139,12 +181,19 @@ def update_order(order_id):
     conn = None
     try:
         data = request.get_json()
-        
+
         if not data:
             return jsonify({
                 'success': False,
                 'error': 'No data provided'
             }), 400
+
+        # Optimistic-lock metadata: the id of the order the browser form was
+        # populated from. If the form's data belongs to a *different* order than
+        # the one being saved, this write would silently clobber the target.
+        base_order_id = data.pop('base_order_id', None)
+        base_updated_at = data.pop('base_updated_at', None)
+        save_source = str(data.pop('save_source', '') or '') or None
 
         apply_po_fields(data)
 
@@ -173,6 +222,40 @@ def update_order(order_id):
         
         # Filter data to only include fields that exist in the database
         update_fields = {k: v for k, v in data.items() if k in columns and k != 'id'}
+
+        # --- Optimistic-lock guard -------------------------------------------
+        # If this payload would change any identity-critical field AND the
+        # browser says the form was populated from a *different* order, refuse:
+        # this is the stale/cross-order form bug that silently overwrote real
+        # orders (Mary Zilge -> Bill Hanson, 2026-09-03). Same-order saves are
+        # allowed through (last-write-wins) but still audited below.
+        parsed_base_id = coerce_optional_int(base_order_id)
+        prelim_protected = _protected_field_changes(update_fields, existing_row)
+        if prelim_protected and parsed_base_id is not None and parsed_base_id != order_id:
+            try:
+                record_order_field_changes(
+                    conn, order_id, prelim_protected,
+                    source=save_source, base_order_id=parsed_base_id, blocked=True,
+                )
+                conn.commit()
+            except Exception:
+                logger.exception('failed to log blocked cross-order save (order_id=%s)', order_id)
+            logger.warning(
+                'BLOCKED cross-order save: PUT /api/orders/%s carried form data '
+                'from order #%s (fields=%s, source=%s)',
+                order_id, parsed_base_id, [c[0] for c in prelim_protected], save_source,
+            )
+            return jsonify({
+                'success': False,
+                'error': 'wrong_order',
+                'error_code': 'wrong_order',
+                'message': (
+                    f'This edit was made against order #{parsed_base_id}, not '
+                    f'order #{order_id}. Nothing was saved — reload the order '
+                    f'and re-enter your change.'
+                ),
+                'order': attach_po_display(dict_from_row(existing_row)),
+            }), 409
 
         # The main order edit form always submits a full, freshly-populated snapshot of
         # every field (see showOrderModal in app.js), so a blank there means the user
@@ -204,6 +287,12 @@ def update_order(order_id):
             'vendor_ack_number',
             'vendor_ack_total',
             'eta_date',
+            # 'vendor' is rendered on 4 different stage cards (PO Created, Order
+            # Placed w/ Vendor, Vendor Ack Received, ETA Confirmed) but only one
+            # stage's card exists in the DOM at a time, so any other stage's
+            # narrow save can carry it blank. Guard it like its sibling fields
+            # above, or it silently resets (2026-09-04, order #444).
+            'vendor',
         }
         for field in blank_preserve_fields:
             if field not in update_fields:
@@ -288,15 +377,35 @@ def update_order(order_id):
                 'success': False,
                 'error': 'No valid fields to update'
             }), 400
-        
+
+        # Audit + safety-snapshot every identity-critical change before it lands,
+        # so a bad overwrite can always be traced and undone.
+        final_protected = _protected_field_changes(update_fields, existing_row)
+        if final_protected:
+            try:
+                backup_order(order_id)
+            except Exception:
+                logger.exception('pre-change backup failed (order_id=%s)', order_id)
+            try:
+                record_order_field_changes(
+                    conn, order_id, final_protected,
+                    source=save_source, base_order_id=parsed_base_id, blocked=False,
+                )
+            except Exception:
+                logger.exception('failed to log order field changes (order_id=%s)', order_id)
+            logger.info(
+                'order #%s protected fields changed: %s (source=%s, base=%s)',
+                order_id, [c[0] for c in final_protected], save_source, parsed_base_id,
+            )
+
         # Add updated_at timestamp
         update_fields['updated_at'] = datetime.now().isoformat()
-        
+
         # Build UPDATE query
         set_clause = ', '.join(f"{field} = ?" for field in update_fields.keys())
         values = list(update_fields.values())
         values.append(order_id)  # for WHERE clause
-        
+
         query = f"UPDATE orders SET {set_clause} WHERE id = ?"
         conn.execute(query, values)
         conn.commit()
